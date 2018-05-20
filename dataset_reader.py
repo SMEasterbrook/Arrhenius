@@ -24,6 +24,15 @@ class TimeboundNetCDFReader:
         self._file_format = format
         self._data = None
 
+    def _open_dataset(self):
+        """ Ensure the data reader's NetCDF dataset has been opened. """
+        if self._data is None:
+            self._data = Dataset(self._file, self._file_mode,
+                                 self._file_format)
+
+    def _dataset(self):
+        return self._data
+
     def read_newest(self, datapoint):
         """
         Retrieve the data under the heading specified by var, limited to the
@@ -37,15 +46,11 @@ class TimeboundNetCDFReader:
         """
         today = datetime.now()
         this_year = int(today.year)
-        data_now = self._collect_data(datapoint, range(this_year, this_year))
+        data_now = self.collect_data(datapoint, this_year - 1)
+        print(data_now)
 
-        return self._adjust_values(data_now)
-
-    def _open_dataset(self):
-        """ Ensure the data reader's NetCDF dataset has been opened. """
-        if self._data is None:
-            self._data = Dataset(self._file, self._file_mode,
-                                 self._file_format)
+        self._adjust_values(data_now)
+        return data_now
 
     def collect_data(self, datapoint, years):
         """
@@ -66,7 +71,7 @@ class TimeboundNetCDFReader:
 
     def _adjust_values(self, data):
         """
-        Ensures values from the dataset are in relative form.
+        Mutates data to ensure values from the dataset are in absolute form.
 
         This operation may not be necessary if the dataset already provides
         absolute data. This method is tailored to such datasets, and does
