@@ -1,4 +1,5 @@
 from dataset_reader import TimeboundNetCDFReader
+from resources import DATASET_PATH, DATASETS
 
 
 class BerkeleyEarthTemperatureReader(TimeboundNetCDFReader):
@@ -44,7 +45,7 @@ class BerkeleyEarthTemperatureReader(TimeboundNetCDFReader):
 
 
 if __name__ == '__main__':
-    file = "models/Land_And_Ocean_LatLong1.nc"
+    file = DATASET_PATH + DATASETS['temperature']
     reader = BerkeleyEarthTemperatureReader(file)
 
     temp_data = reader.read_newest('temperature')

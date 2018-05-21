@@ -47,7 +47,6 @@ class TimeboundNetCDFReader:
         today = datetime.now()
         this_year = int(today.year)
         data_now = self.collect_data(datapoint, this_year - 1)
-        print(data_now)
 
         self._adjust_values(data_now)
         return data_now
