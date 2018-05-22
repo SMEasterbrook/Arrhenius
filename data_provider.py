@@ -1,5 +1,4 @@
 import custom_data_readers
-from resources import DATASET_PATH, DATASETS
 
 import numpy as np
 
@@ -45,17 +44,16 @@ def berkeley_temperature_data() -> np.array:
 
     :return: Berkeley Earth surface temperature data
     """
-    temp_data_file = DATASET_PATH + DATASETS['temperature']
-    dataset = custom_data_readers.BerkeleyEarthTemperatureReader(
-        temp_data_file)
+    dataset = custom_data_readers.BerkeleyEarthTemperatureReader()
 
     data = dataset.read_newest('temperature')
-    clmt = dataset.read_newest('climatology')
+    clmt = dataset.collect_untimed_data('climatology')
 
     for i in range(0, 12):
         # Store arrays locally to avoid repeatedly indexing dataset.
         data_by_month = data[i]
         clmt_by_month = clmt[i]
+        print("Progress: {}/12".format(i))
 
         for j in range(0, 180):
             data_by_lat = data_by_month[j]
@@ -82,13 +80,11 @@ def static_albedo_data():
 
     :return: Static surface albedo data by Arrhenius' scheme
     """
-    temp_data_file = DATASET_PATH + DATASETS['temperature']
-    dataset = custom_data_readers.BerkeleyEarthTemperatureReader(
-        temp_data_file)
+    dataset = custom_data_readers.BerkeleyEarthTemperatureReader()
 
     # Berkeley Earth dataset includes variables indicating which 1-degree
     # latitude-longitude cells are primarily land.
-    land_coords = dataset.read_newest('land_mask')
+    land_coords = dataset.collect_untimed_data('land_mask')
     # Land values have an albedo of 1. Fill in all for now.
     land_mask = np.ones((180, 360), dtype=float)
 
@@ -105,3 +101,18 @@ def static_albedo_data():
                 mask_row[j] = ocean_albedo
 
     return land_mask
+
+
+def static_absorbance_data():
+    """
+    A data provider that gives a single, global atmospheric heat absorption
+    value.
+
+    This value is taken directly from Arrhenius' original paper, in which its
+    derivation is unclear. Modern heat absorbance would have risen since
+    Arrhenius' time.
+
+    :return:
+        Arrhenius' atmospheric absorption coefficient
+    """
+    return STATIC_ATM_ABSORBANCE

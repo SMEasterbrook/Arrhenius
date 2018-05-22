@@ -80,3 +80,4 @@ class TimeboundNetCDFReader:
         :return:
             The data under the requested header
         """
+        raise NotImplementedError

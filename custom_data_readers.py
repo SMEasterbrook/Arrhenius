@@ -8,7 +8,8 @@ class BerkeleyEarthTemperatureReader(TimeboundNetCDFReader):
     temperature dataset.
     """
 
-    def __init__(self, file_name, format="NETCDF4"):
+    def __init__(self, format="NETCDF4"):
+        file_name = DATASET_PATH + DATASETS['temperature']['berkeley']
         super(BerkeleyEarthTemperatureReader, self).__init__(file_name, format)
 
     def collect_timed_data(self, datapoint, year):
