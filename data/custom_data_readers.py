@@ -1,5 +1,5 @@
-from dataset_reader import TimeboundNetCDFReader
-from resources import DATASET_PATH, DATASETS
+from data.dataset_reader import TimeboundNetCDFReader
+from data.resources import DATASET_PATH, DATASETS
 
 
 class BerkeleyEarthTemperatureReader(TimeboundNetCDFReader):

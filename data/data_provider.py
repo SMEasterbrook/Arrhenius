@@ -1,4 +1,4 @@
-import custom_data_readers
+from data import custom_data_readers
 
 import numpy as np
 
