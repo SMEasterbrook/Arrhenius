@@ -53,7 +53,6 @@ def berkeley_temperature_data() -> np.array:
         # Store arrays locally to avoid repeatedly indexing dataset.
         data_by_month = data[i]
         clmt_by_month = clmt[i]
-        print("Progress: {}/12".format(i))
 
         for j in range(0, 180):
             data_by_lat = data_by_month[j]
@@ -105,7 +104,7 @@ def static_albedo_data():
 
 def static_absorbance_data():
     """
-    A data provider that gives a single, global atmospheric heat absorption
+    A data provider that gives a single, global atmospheric heat absorbance
     value.
 
     This value is taken directly from Arrhenius' original paper, in which its
@@ -113,6 +112,6 @@ def static_absorbance_data():
     Arrhenius' time.
 
     :return:
-        Arrhenius' atmospheric absorption coefficient
+        Arrhenius' atmospheric absorbance coefficient
     """
     return STATIC_ATM_ABSORBANCE
