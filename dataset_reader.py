@@ -46,12 +46,11 @@ class TimeboundNetCDFReader:
         """
         today = datetime.now()
         this_year = int(today.year)
-        data_now = self.collect_data(datapoint, this_year - 1)
+        data_now = self.collect_timed_data(datapoint, this_year - 1)
 
-        self._adjust_values(data_now)
         return data_now
 
-    def collect_data(self, datapoint, years):
+    def collect_timed_data(self, datapoint, years):
         """
         Returns the data under the specified header, taken from the selected
         range of years.
@@ -64,24 +63,20 @@ class TimeboundNetCDFReader:
         :param years:
             The range of years from which to collect data
         :return:
-            The requested data, limited to that from the selected years.
+            The requested data, limited to that from the selected years
         """
         raise NotImplementedError
 
-    def _adjust_values(self, data):
+    def collect_untimed_data(self, datapoint):
         """
-        Mutates data to ensure values from the dataset are in absolute form.
+        Returns the data under the specified header, which is not associated
+        with a time field.
 
-        This operation may not be necessary if the dataset already provides
-        absolute data. This method is tailored to such datasets, and does
-        not make any changes to the data.
+        Subclasses must provide a data-set specific override of this method,
+        since different datasets may have different structures.
 
-        If a dataset does not contain absolute data, a subclass should be
-        made that overrides this method, converting the data to absolute form.
-
-        :param data:
-            Data straight from the dataset
+        :param datapoint:
+            The heading of the required data
         :return:
-            The same data in absolute form
+            The data under the requested header
         """
-        return data

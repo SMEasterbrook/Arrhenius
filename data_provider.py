@@ -50,6 +50,21 @@ def berkeley_temperature_data() -> np.array:
         temp_data_file)
 
     data = dataset.read_newest('temperature')
+    clmt = dataset.read_newest('climatology')
+
+    for i in range(0, 12):
+        # Store arrays locally to avoid repeatedly indexing dataset.
+        data_by_month = data[i]
+        clmt_by_month = clmt[i]
+
+        for j in range(0, 180):
+            data_by_lat = data_by_month[j]
+            clmt_by_lat = clmt_by_month[j]
+
+            for k in range(0, 360):
+                # Only one array index required per addition instead
+                # of three gives significant performance increases.
+                data_by_lat[k] += clmt_by_lat[k]
     return data
 
 
