@@ -1,4 +1,5 @@
 DATASET_PATH = 'models/'
+OUTPUT_PATH = 'output/'
 
 DATASETS = {
     'temperature': {
