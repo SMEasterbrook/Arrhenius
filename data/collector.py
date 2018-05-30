@@ -1,3 +1,5 @@
+import numpy as np
+import provider as pr
 
 
 class ClimateDataCollector:
@@ -12,12 +14,55 @@ class ClimateDataCollector:
     test functionality.
     """
 
-    def __init__(self):
+    def __init__(self, grid=None):
         self._temp_source = None
         self._albedo_source = None
         self._absorbance_source = None
         self._grid_data = None
         self._absorbance_data = None
+
+        if grid is None:
+            # Default grid dimensions give 1 by 1 degree squares.
+            self._grid = (180, 360)
+        else:
+            self.load_grid(grid)
+
+    def load_grid(self, grid):
+        """
+        Select dimensions for a new latitude and longitude grid, to which
+        all gridded data is fitted.
+
+        The grid is reported as a tuple of two elements. The first element
+        represents the latitudinal width of a single grid cell, in degrees.
+        The second element represents the longitudinal width of a grid cell,
+        also in degrees.
+
+        For example, passing a tuple of (10, 10) would create a grid of
+        10-by-10-degree squares, with 18 divisions of latitude and 36
+        divisions of longitude.
+
+        Although floating-point values are acceptable within the tuple (e.g.
+        latitudinal width of 0.5 degrees) but the number of grid cells
+        produced is rounded to an integer.
+
+        :param grid:
+            A tuple denoting the size of a grid cell
+        """
+        if grid is None:
+            raise ValueError("grid must not be None")
+        elif type(grid) != tuple:
+            raise TypeError("grid must be of type tuple (is {})".format(type(grid)))
+        elif len(grid) != 2:
+            raise ValueError("grid must contain exactly 2 elements (contains {})".format(len(grid)))
+        elif type(grid[0]) != float and type(grid[0]) != int:
+            raise ValueError("grid elements must be numeric types (element 0 is type {})".format(type(grid[0])))
+        elif type(grid[1]) != float and type(grid[0]) != int:
+            raise ValueError("grid elements must be numeric types (element 1 is type {})".format(type(grid[1])))
+
+        lat_size = int(180 / grid[0])
+        lon_size = int(360 / grid[1])
+
+        self._grid = (lat_size, lon_size)
 
     def use_temperature_source(self, temp_src):
         """
@@ -96,20 +141,21 @@ class ClimateDataCollector:
         elif self._albedo_source is None:
             raise PermissionError("No albedo provider function selected")
 
-        temp_data = self._temp_source()
-        albedo_data = self._albedo_source()
+        temp_data = self._temp_source(self._grid)
+        albedo_data = self._albedo_source(self._grid)
+
         self._grid_data = []
 
         # Start building a 2-D nested list structure for output, row by row.
-        for i in range(180):
+        for i in range(self._grid[0]):
             # Holding row lists in memory prevents excess list lookups.
             albedo_row = albedo_data[i]
             # Start creating a new list column for entry into the output list.
             longitude_row = []
 
-            for j in range(360):
+            for j in range(self._grid[1]):
                 albedo = albedo_row[j]
-                temp = temp_data[:, i, j]
+                temp = temp_data[1::]
 
                 # Create JSON-like grid cell dictionary with gridded data.
                 grid_cell_obj = {
