@@ -1,4 +1,4 @@
-from data.dataset_reader import TimeboundNetCDFReader
+from data.reader import TimeboundNetCDFReader
 from data.resources import DATASET_PATH, DATASETS
 
 
