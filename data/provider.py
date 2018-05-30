@@ -132,8 +132,8 @@ def berkeley_temperature_data(grid=None) -> np.array:
     clmt = dataset.collect_untimed_data('climatology')
 
     # Translate data from the default, 1 by 1 grid to any specified grid.
-    regridded_data = _regrid_variable(dataset, data, grid, 3)
-    regridded_clmt = _regrid_variable(dataset, clmt, grid, 3)
+    regridded_data = _regrid_variable(dataset, data[:], grid, 1)
+    regridded_clmt = _regrid_variable(dataset, clmt[:], grid, 1)
 
     for i in range(0, 12):
         # Store arrays locally to avoid repeatedly indexing dataset.
