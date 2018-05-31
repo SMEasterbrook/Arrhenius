@@ -1,0 +1,5 @@
+.git
+.idea
+data/models
+data/output/*
+__pycache__
