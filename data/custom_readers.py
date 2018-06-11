@@ -25,9 +25,8 @@ class BerkeleyEarthTemperatureReader(TimeboundNetCDFReader):
         # Slice the dataset across the selected range of years.
         return var[start_ind:start_ind + 12, :, :]
 
-    def collect_untimed_data(self, datapoint):
-        self._open_dataset()
+    def latitude(self):
+        return self.collect_untimed_data("latitude")
 
-        data = self._dataset()
-        var = data.variables[datapoint]
-        return var
+    def longitude(self):
+        return self.collect_untimed_data("longitude")

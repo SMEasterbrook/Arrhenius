@@ -1,5 +1,5 @@
 from netCDF4 import Dataset
-from resources import OUTPUT_PATH
+from .resources import OUTPUT_PATH
 
 
 class NetCDFWriter:

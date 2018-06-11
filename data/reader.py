@@ -80,4 +80,14 @@ class TimeboundNetCDFReader:
         :return:
             The data under the requested header
         """
+        self._open_dataset()
+
+        data = self._dataset()
+        var = data.variables[datapoint]
+        return var
+
+    def latitude(self):
+        raise NotImplementedError
+
+    def longitude(self):
         raise NotImplementedError
