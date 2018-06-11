@@ -1,8 +1,8 @@
 from data import custom_readers
+from data.grid import convert_grid_format
 
 import numpy as np
 import pyresample
-import matplotlib.pyplot as plt
 
 """
 This module contains prebuilt and custom data providers, functions
@@ -32,7 +32,7 @@ STATIC_ATM_H2O = None
 STATIC_ATM_ABSORBANCE = 0.70
 
 
-def _adjust_to_grid(dataset, data_var, grid):
+def _adjust_latlong_grid(dataset, data_var, grid):
     """
     Translate a latitude-longitude variable from its native grid to the
     specified grid dimensions.
@@ -50,34 +50,31 @@ def _adjust_to_grid(dataset, data_var, grid):
     :return:
         The dataset variable, translated onto the specified grid
     """
-    if grid is None:
-        return data_var
-    else:
-        # Read latitude and longitude widths directly from the dataset
-        now_lat_size = len(dataset.collect_untimed_data('latitude'))
-        now_lon_size = len(dataset.collect_untimed_data('longitude'))
+    # Read latitude and longitude widths directly from the dataset
+    now_lat_size = len(dataset.latitude())
+    now_lon_size = len(dataset.longitude())
 
-        # AreaDefinitions represent latitude-longitude grids.
-        # Most of the values in this constructor are unimportant, except for
-        # the latitude and longitude dimensions.
-        now_grid = pyresample.geometry.AreaDefinition(
-            'blank', 'nothing', 'blank', {'proj': 'laea'},
-            now_lon_size, now_lat_size, [0, 0, 1, 1]
-        )
+    # AreaDefinitions represent latitude-longitude grids.
+    # Most of the values in this constructor are unimportant, except for
+    # the latitude and longitude dimensions.
+    now_grid = pyresample.geometry.AreaDefinition(
+        'blank', 'nothing', 'blank', {'proj': 'laea'},
+        now_lon_size, now_lat_size, [0, 0, 1, 1]
+    )
 
-        final_grid = pyresample.geometry.AreaDefinition(
-            'blank', 'nothing', 'blank', {'proj': 'laea'},
-            grid[1], grid[0], [0, 0, 1, 1]
-        )
+    final_grid = pyresample.geometry.AreaDefinition(
+        'blank', 'nothing', 'blank', {'proj': 'laea'},
+        grid[1], grid[0], [0, 0, 1, 1]
+    )
 
-        # Regrid the data using nearest neighbor sampling.
-        now_img = pyresample.image.ImageContainerNearest(data_var, now_grid, radius_of_influence=32)
-        final_img = now_img.resample(final_grid)
+    # Regrid the data using nearest neighbor sampling.
+    now_img = pyresample.image.ImageContainerNearest(data_var, now_grid, radius_of_influence=32)
+    final_img = now_img.resample(final_grid)
 
-        return final_img.image_data
+    return final_img.image_data
 
 
-def _regrid_variable(dataset, data_var, grid, dim_count):
+def _regrid_netcdf_variable(dataset, data_var, grid, dim_count, grid_form="count"):
     """
     Translate a variable from its native grid to a requested grid dimensions.
 
@@ -98,21 +95,27 @@ def _regrid_variable(dataset, data_var, grid, dim_count):
     :return:
         The data, translated onto the specified grid
     """
+    if grid is None:
+        return data_var
     if dim_count < 0:
         raise ValueError("Grid inputs must have at least 2 dimensions")
-    elif dim_count == 0:
-        return _adjust_to_grid(dataset, data_var, grid)
     else:
-        new_grid = []
+        if grid_form == "width":
+            grid = convert_grid_format(grid)
 
-        # Temporary solution. Regrid each index separately and reform array.
-        for i in range(len(data_var)):
-            new_grid.append(_regrid_variable(dataset, data_var[i], grid, dim_count - 1))
+        if dim_count == 0:
+            return _adjust_latlong_grid(dataset, data_var, grid)
+        else:
+            new_grid = []
 
-        return new_grid
+            # Temporary solution. Regrid each index separately and reform array.
+            for i in range(len(data_var)):
+                new_grid.append(_regrid_netcdf_variable(dataset, data_var[i], grid, dim_count - 1))
+
+            return new_grid
 
 
-def berkeley_temperature_data(grid=None) -> np.array:
+def berkeley_temperature_data(grid=(180, 360)) -> np.array:
     """
     A data provider returning temperature data from the Berkeley Earth
     temperature dataset. Includes 100% surface and ocean coverage in
@@ -124,6 +127,8 @@ def berkeley_temperature_data(grid=None) -> np.array:
     with 0 being 90 and 179 being 90; the third index is longitude,
     specifications unknown.
 
+    :param grid: Number of latitude and longitude cells in the grid in
+                 which the data is to be returned
     :return: Berkeley Earth surface temperature data
     """
     dataset = custom_readers.BerkeleyEarthTemperatureReader()
@@ -132,8 +137,8 @@ def berkeley_temperature_data(grid=None) -> np.array:
     clmt = dataset.collect_untimed_data('climatology')
 
     # Translate data from the default, 1 by 1 grid to any specified grid.
-    regridded_data = _regrid_variable(dataset, data[:], grid, 1)
-    regridded_clmt = _regrid_variable(dataset, clmt[:], grid, 1)
+    regridded_data = _regrid_netcdf_variable(dataset, data[:], grid, 1)
+    regridded_clmt = _regrid_netcdf_variable(dataset, clmt[:], grid, 1)
 
     for i in range(0, 12):
         # Store arrays locally to avoid repeatedly indexing dataset.
@@ -161,7 +166,7 @@ def static_albedo_data(grid):
     would contribute to lower global average albedo.
 
     Data is returned in a numpy array. The first index represents
-    latitude, with 0 being 90 and 179 being 90; the seconds index is
+    latitude, with 0 being -90 and 179 being 90; the second index is
     longitude, specifications unknown.
 
     :return: Static surface albedo data by Arrhenius' scheme
@@ -172,7 +177,7 @@ def static_albedo_data(grid):
     # latitude-longitude cells are primarily land.
     land_coords = dataset.collect_untimed_data('land_mask')
     # Regrid the land/ocean variable to the specified grid, if necessary.
-    regridded_land_coords = _adjust_to_grid(dataset, land_coords[::], grid)
+    regridded_land_coords = _regrid_netcdf_variable(dataset, land_coords[::], grid, 0)
 
     # Land values have an albedo of 1. Fill in all for now.
     land_mask = np.ones((grid[0], grid[1]), dtype=float)
