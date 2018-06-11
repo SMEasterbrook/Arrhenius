@@ -87,7 +87,17 @@ class TimeboundNetCDFReader:
         return var
 
     def latitude(self):
+        """
+        Returns the NetCDF data file's latitude variable values.
+
+        :return: The dataset's latitude variable
+        """
         raise NotImplementedError
 
     def longitude(self):
+        """
+        Returns the NetCDF data file's longitude variable values.
+
+        :return: The dataset's longitude variable
+        """
         raise NotImplementedError
