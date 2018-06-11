@@ -7,5 +7,7 @@ DATASETS = {
     },
     'albedo': None,
     'carbon': None,
-    'water': None
+    'water': {
+        'NCEP/NCAR': 'shum.mon.mean.nc'
+    }
 }
