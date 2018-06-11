@@ -157,6 +157,30 @@ def berkeley_temperature_data(grid=(180, 360)) -> np.array:
     return regridded_data
 
 
+def ncar_humidity_data(grid=(180, 360)):
+    """
+    A data provider returning (by default) 1-degree gridded relative
+    humidity data at surface level. The data will be adjusted to a new
+    grid if one is provided.
+
+    Data is returned as a nested list structure. The outermost list has
+    12 indices, and represents months of the year. For instance, index 0
+    represents January, and index 9 is October. The second index is latitude,
+    and the third is longitude.
+
+    :param grid: Number of latitude and longitude cells in the grid in
+                 which the data is to be returned
+    :return: NCEP/NCAR surface relative humidity data
+    """
+    dataset = custom_readers.NCEPHumidityReader()
+
+    humidity = dataset.read_newest('shum')
+    # Regrid the humidity variable to the specified grid, if necessary.
+    regridded_humidity = _regrid_netcdf_variable(dataset, humidity[:, :, :], grid, 1)
+
+    return regridded_humidity
+
+
 def static_albedo_data(grid):
     """
     A data provider returning 1-degree gridded surface albedo data
