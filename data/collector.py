@@ -1,5 +1,4 @@
-import numpy as np
-import provider as pr
+from grid import GridCell, convert_grid_format
 
 
 class ClimateDataCollector:
@@ -15,9 +14,13 @@ class ClimateDataCollector:
     """
 
     def __init__(self, grid=None):
+        # Provider functions that produce various types of data
         self._temp_source = None
+        self._humidity_source = None
         self._albedo_source = None
         self._absorbance_source = None
+
+        # Cached, combined data from the above.
         self._grid_data = None
         self._absorbance_data = None
 
@@ -51,18 +54,19 @@ class ClimateDataCollector:
         if grid is None:
             raise ValueError("grid must not be None")
         elif type(grid) != tuple:
-            raise TypeError("grid must be of type tuple (is {})".format(type(grid)))
+            raise TypeError("grid must be of type tuple"
+                            "(is {})".format(type(grid)))
         elif len(grid) != 2:
-            raise ValueError("grid must contain exactly 2 elements (contains {})".format(len(grid)))
+            raise ValueError("grid must contain exactly 2 elements"
+                             "(contains {})".format(len(grid)))
         elif type(grid[0]) != float and type(grid[0]) != int:
-            raise ValueError("grid elements must be numeric types (element 0 is type {})".format(type(grid[0])))
+            raise ValueError("grid elements must be numeric types"
+                             "(element 0 is type {})".format(type(grid[0])))
         elif type(grid[1]) != float and type(grid[0]) != int:
-            raise ValueError("grid elements must be numeric types (element 1 is type {})".format(type(grid[1])))
+            raise ValueError("grid elements must be numeric types"
+                             "(element 1 is type {})".format(type(grid[1])))
 
-        lat_size = int(180 / grid[0])
-        lon_size = int(360 / grid[1])
-
-        self._grid = (lat_size, lon_size)
+        self._grid = convert_grid_format(grid)
 
     def use_temperature_source(self, temp_src):
         """
@@ -71,7 +75,7 @@ class ClimateDataCollector:
         builder method calls can be continued.
 
         Calling this function voids any previously cached grid data, including
-        albedo values.
+        relative humidity and albedo values.
 
         :param temp_src:
             A new temperature provider function
@@ -82,6 +86,24 @@ class ClimateDataCollector:
         self._grid_data = None
         return self
 
+    def use_humidity_source(self, r_hum_src):
+        """
+        Load a new relative humidity provider function, used as an access point
+        to humidity data. Returns the collector object, so that repeated
+        builder method calls can be continued.
+
+        Calling this function voids any previously cached data, including
+        temperature and albedo values.
+
+        :param r_hum_src:
+            A new relative humidity provider function
+        :return:
+            This ClimateDataCollector instance
+        """
+        self._humidity_source = r_hum_src
+        self._grid_data = None
+        return self
+
     def use_albedo_source(self, albedo_src):
         """
         Load a new albedo provider function, used as an access point to
@@ -89,7 +111,7 @@ class ClimateDataCollector:
         builder method calls can be continued.
 
         Calling this function voids any previously cached grid data, including
-        temperature values.
+        temperature and relative humidity values.
 
         :param albedo_src:
             A new albedo provider function
@@ -142,6 +164,7 @@ class ClimateDataCollector:
             raise PermissionError("No albedo provider function selected")
 
         temp_data = self._temp_source(self._grid)
+        r_hum_data = self._humidity_source(self._grid)
         albedo_data = self._albedo_source(self._grid)
 
         self._grid_data = []
@@ -149,19 +172,19 @@ class ClimateDataCollector:
         # Start building a 2-D nested list structure for output, row by row.
         for i in range(self._grid[0]):
             # Holding row lists in memory prevents excess list lookups.
+            temp_row = temp_data[0][i]
+            r_hum_row = r_hum_data[0][i]
             albedo_row = albedo_data[i]
             # Start creating a new list column for entry into the output list.
             longitude_row = []
 
             for j in range(self._grid[1]):
+                temp = temp_row[j]
+                r_hum = r_hum_row[j]
                 albedo = albedo_row[j]
-                temp = temp_data[1::]
 
                 # Create JSON-like grid cell dictionary with gridded data.
-                grid_cell_obj = {
-                    'temperature': temp,
-                    'albedo': albedo
-                }
+                grid_cell_obj = GridCell(temp, r_hum, albedo)
 
                 # Add new objects into the 2-D nested lists.
                 longitude_row.append(grid_cell_obj)
