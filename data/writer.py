@@ -1,5 +1,5 @@
 from netCDF4 import Dataset
-from .resources import OUTPUT_PATH
+from typing import List, Tuple, Union
 
 
 class NetCDFWriter:
@@ -8,7 +8,9 @@ class NetCDFWriter:
     of NetCDF files one variable at a time.
     """
 
-    def __init__(self, dimensions=None, data=None):
+    def __init__(self: 'NetCDFWriter',
+                 dimensions: List[tuple] = None,
+                 data: List[float] = None) -> None:
         """
         Create a new NetCDFWriter instance.
 
@@ -21,7 +23,8 @@ class NetCDFWriter:
         self._data = data
         self._var_meta = None
 
-    def add_dimension(self, dim):
+    def add_dimension(self: 'NetCDFWriter',
+                      dim: Tuple[Union[str, type, int]]) -> 'NetCDFWriter':
         """
         Adds a new variable dimension to the end of the current list
         of dimensions.
@@ -60,7 +63,8 @@ class NetCDFWriter:
         self._dimensions.append(dim)
         return self
 
-    def data(self, data):
+    def data(self: 'NetCDFWriter',
+             data: List[float]) -> 'NetCDFWriter':
         """
         Submit a set of data that can be written to a NetCDF file.
 
@@ -91,7 +95,8 @@ class NetCDFWriter:
         self._data = data
         return self
 
-    def variable_meta(self, var_meta):
+    def variable_meta(self: 'NetCDFWriter',
+                      var_meta: Tuple[Union[int, type]]) -> 'NetCDFWriter':
         """
         Load a new set of metadata for the variable to be written.
 
@@ -117,7 +122,9 @@ class NetCDFWriter:
         self._var_meta = var_meta
         return self
 
-    def write(self, file_name, format='NETCDF4'):
+    def write(self: 'NetCDFWriter',
+              filepath: str,
+              format: str = 'NETCDF4') -> None:
         """
         Use the dimensions, variable data, and variable metadata to write a
         NetCDF file with the specified format. This file is placed in the
@@ -128,8 +135,8 @@ class NetCDFWriter:
         function exits, and so it can be called successively with different
         file name arguments without having to reload data.
 
-        :param file_name:
-            The name of the NetCDF file to be produced
+        :param filepath:
+            An absolute or relative path to the NetCDF file to be produced
         :param format:
             The file format for the NetCDF file (defaults to NetCDF4)
         """
@@ -141,8 +148,7 @@ class NetCDFWriter:
             raise ValueError("No variable metadata has been entered")
 
         # Create a new NetCDF dataset in memory.
-        file_path = OUTPUT_PATH + file_name + '.nc'
-        output_file = Dataset(file_path, 'w', format)
+        output_file = Dataset(filepath, 'w', format)
 
         # Create dimensions within the dataset.
         for dim in self._dimensions:
