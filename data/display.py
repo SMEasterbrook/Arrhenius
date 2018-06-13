@@ -2,10 +2,13 @@ import os
 from typing import List, Tuple, Union
 
 from resources import OUTPUT_REL_PATH
+from writer import NetCDFWriter
+from grid import convert_grid_format
 
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 OUTPUT_FULL_PATH = os.path.join(Path('.').absolute(), OUTPUT_REL_PATH)
@@ -19,7 +22,7 @@ class ModelImageRenderer:
     """
     def __init__(self: 'ModelImageRenderer',
                  data: List[Union[List, float]],
-                 grid: Tuple[int] = (1, 1)) -> None:
+                 grid: Tuple[int, int] = (1, 1)) -> None:
         """
         Instantiate a new ModelImageReader.
 
@@ -97,7 +100,7 @@ class ModelOutput:
     def __init__(self: 'ModelOutput',
                  title: str,
                  data: List[Union[List, float]],
-                 data_grid: Tuple[int]) -> None:
+                 data_grid: Tuple[int, int]) -> None:
         """
         Instantiate a new ModelOutput object.
 
@@ -136,3 +139,38 @@ class ModelOutput:
         self._data = data
         self._grid = data_grid
 
+    def write_output(self: 'ModelOutput') -> None:
+        """
+        Produce NetCDF data files and image files from the provided data, and
+        a directory to hold them.
+
+        One image file is created for every time segment in the data. In the
+        case of Arrhenius' model, this is one per season. Only one NetCDF data
+        file is produced, in which all time segments are present.
+        """
+        # Create a directory for this model output if none exists already.
+        out_dir_path = os.path.join(OUTPUT_FULL_PATH, self._title)
+        out_dir = Path(out_dir_path)
+        out_dir.mkdir(exist_ok=True)
+
+        out_file_path = os.path.join(out_dir_path, self._title + ".nc")
+        file_ext = '.png'
+
+        # Write the data out to a NetCDF file in the output directory.
+        grid_by_count = convert_grid_format(self._grid)
+
+        nc_writer = NetCDFWriter(data=self._data)\
+            .add_dimension(('time', np.int32, len(self._data))) \
+            .add_dimension(('latitude', np.int32, grid_by_count[0])) \
+            .add_dimension(('longitude', np.int32, grid_by_count[1])) \
+            .variable_meta(('temp', np.float32))
+        nc_writer.write(out_file_path)
+
+        # Write an image file for each time segment.
+        for i in range(len(self._data)):
+            img_name = self._title + '_' + str(i + 1) + file_ext
+            img_path = os.path.join(out_dir_path, img_name)
+
+            # Produce and save the image.
+            g = ModelImageRenderer(self._data[i], grid=self._grid)
+            g.save_image(img_path)
