@@ -1,4 +1,9 @@
+from typing import List, Tuple, Callable, Union
 from grid import GridCell, convert_grid_format
+
+
+# Type aliases
+CDC = 'ClimateDataCollector'
 
 
 class ClimateDataCollector:
@@ -13,7 +18,8 @@ class ClimateDataCollector:
     test functionality.
     """
 
-    def __init__(self, grid=None):
+    def __init__(self: CDC,
+                 grid: Tuple[int, int] = None) -> None:
         # Provider functions that produce various types of data
         self._temp_source = None
         self._humidity_source = None
@@ -30,10 +36,12 @@ class ClimateDataCollector:
         else:
             self.load_grid(grid)
 
-    def load_grid(self, grid):
+    def load_grid(self: CDC,
+                  grid: Tuple[int, int]) -> CDC:
         """
         Select dimensions for a new latitude and longitude grid, to which
-        all gridded data is fitted.
+        all gridded data is fitted. Returns the collector object, so that
+        repeated builder method calls can be continued.
 
         The grid is reported as a tuple of two elements. The first element
         represents the latitudinal width of a single grid cell, in degrees.
@@ -67,8 +75,10 @@ class ClimateDataCollector:
                              "(element 1 is type {})".format(type(grid[1])))
 
         self._grid = convert_grid_format(grid)
+        return self
 
-    def use_temperature_source(self, temp_src):
+    def use_temperature_source(self: CDC,
+                               temp_src: Callable) -> CDC:
         """
         Load a new temperature provider function, used as an access point to
         temperature data. Returns the collector object, so that repeated
@@ -86,7 +96,8 @@ class ClimateDataCollector:
         self._grid_data = None
         return self
 
-    def use_humidity_source(self, r_hum_src):
+    def use_humidity_source(self: CDC,
+                            r_hum_src: Callable) -> CDC:
         """
         Load a new relative humidity provider function, used as an access point
         to humidity data. Returns the collector object, so that repeated
@@ -104,7 +115,8 @@ class ClimateDataCollector:
         self._grid_data = None
         return self
 
-    def use_albedo_source(self, albedo_src):
+    def use_albedo_source(self: CDC,
+                          albedo_src: Callable) -> CDC:
         """
         Load a new albedo provider function, used as an access point to
         surface albedo data. Returns the collector object, so that repeated
@@ -122,7 +134,8 @@ class ClimateDataCollector:
         self._grid_data = None
         return self
 
-    def use_absorbance_source(self, absorbance_src):
+    def use_absorbance_source(self: CDC,
+                              absorbance_src: Callable) -> CDC:
         """
         Load a new absorbance provider function, used as an access point to
         atmospheric heat absorbance data. Returns the collector object, so
@@ -139,7 +152,7 @@ class ClimateDataCollector:
         self._absorbance_data = None
         return self
 
-    def get_gridded_data(self):
+    def get_gridded_data(self: CDC) -> List[List['GridCell']]:
         """
         Combines and returns all 2-dimensional gridded surface data, including
         surface temperature and surface albedo.
@@ -192,7 +205,7 @@ class ClimateDataCollector:
 
         return self._grid_data
 
-    def get_absorbance_data(self):
+    def get_absorbance_data(self: CDC) -> Union[List[List[float]], float]:
         """
         Builds and returns atmospheric absorbance data.
 
