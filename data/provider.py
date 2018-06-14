@@ -1,8 +1,9 @@
 from data import custom_readers
+from data.grid import convert_grid_format
+from typing import List, Union
 
 import numpy as np
 import pyresample
-import matplotlib.pyplot as plt
 
 """
 This module contains prebuilt and custom data providers, functions
@@ -32,7 +33,9 @@ STATIC_ATM_H2O = None
 STATIC_ATM_ABSORBANCE = 0.70
 
 
-def _adjust_to_grid(dataset, data_var, grid):
+def _adjust_latlong_grid(dataset: 'TimeboundNetCDFReader',
+                         data_var: np.ndarray,
+                         grid: tuple) -> np.ndarray:
     """
     Translate a latitude-longitude variable from its native grid to the
     specified grid dimensions.
@@ -50,34 +53,35 @@ def _adjust_to_grid(dataset, data_var, grid):
     :return:
         The dataset variable, translated onto the specified grid
     """
-    if grid is None:
-        return data_var
-    else:
-        # Read latitude and longitude widths directly from the dataset
-        now_lat_size = len(dataset.collect_untimed_data('latitude'))
-        now_lon_size = len(dataset.collect_untimed_data('longitude'))
+    # Read latitude and longitude widths directly from the dataset
+    now_lat_size = len(dataset.latitude())
+    now_lon_size = len(dataset.longitude())
 
-        # AreaDefinitions represent latitude-longitude grids.
-        # Most of the values in this constructor are unimportant, except for
-        # the latitude and longitude dimensions.
-        now_grid = pyresample.geometry.AreaDefinition(
-            'blank', 'nothing', 'blank', {'proj': 'laea'},
-            now_lon_size, now_lat_size, [0, 0, 1, 1]
-        )
+    # AreaDefinitions represent latitude-longitude grids.
+    # Most of the values in this constructor are unimportant, except for
+    # the latitude and longitude dimensions.
+    now_grid = pyresample.geometry.AreaDefinition(
+        'blank', 'nothing', 'blank', {'proj': 'laea'},
+        now_lon_size, now_lat_size, [0, 0, 1, 1]
+    )
 
-        final_grid = pyresample.geometry.AreaDefinition(
-            'blank', 'nothing', 'blank', {'proj': 'laea'},
-            grid[1], grid[0], [0, 0, 1, 1]
-        )
+    final_grid = pyresample.geometry.AreaDefinition(
+        'blank', 'nothing', 'blank', {'proj': 'laea'},
+        grid[1], grid[0], [0, 0, 1, 1]
+    )
 
-        # Regrid the data using nearest neighbor sampling.
-        now_img = pyresample.image.ImageContainerNearest(data_var, now_grid, radius_of_influence=32)
-        final_img = now_img.resample(final_grid)
+    # Regrid the data using nearest neighbor sampling.
+    now_img = pyresample.image.ImageContainerNearest(data_var, now_grid,
+                                                     radius_of_influence=32)
+    final_img = now_img.resample(final_grid)
 
-        return final_img.image_data
+    return final_img.image_data
 
 
-def _regrid_variable(dataset, data_var, grid, dim_count):
+def _regrid_netcdf_variable(dataset: 'TimeboundNetCDFReader',
+                            data_var: np.ndarray,
+                            grid: tuple,
+                            dim_count: int) -> Union[List, np.ndarray]:
     """
     Translate a variable from its native grid to a requested grid dimensions.
 
@@ -98,21 +102,27 @@ def _regrid_variable(dataset, data_var, grid, dim_count):
     :return:
         The data, translated onto the specified grid
     """
+    if grid is None:
+        return data_var
     if dim_count < 0:
         raise ValueError("Grid inputs must have at least 2 dimensions")
-    elif dim_count == 0:
-        return _adjust_to_grid(dataset, data_var, grid)
     else:
-        new_grid = []
+        if dim_count == 0:
+            return _adjust_latlong_grid(dataset, data_var, grid)
+        else:
+            new_grid = []
 
-        # Temporary solution. Regrid each index separately and reform array.
-        for i in range(len(data_var)):
-            new_grid.append(_regrid_variable(dataset, data_var[i], grid, dim_count - 1))
+            # Temporary solution. Regrid each index separately and
+            # reform array.
+            for i in range(len(data_var)):
+                new_grid.append(_regrid_netcdf_variable(dataset, data_var[i],
+                                                        grid, dim_count - 1))
 
-        return new_grid
+            return new_grid
 
 
-def berkeley_temperature_data(grid=None) -> np.array:
+def berkeley_temperature_data(grid: tuple = (180, 360),
+                              grid_form: str = "count") -> np.array:
     """
     A data provider returning temperature data from the Berkeley Earth
     temperature dataset. Includes 100% surface and ocean coverage in
@@ -124,16 +134,35 @@ def berkeley_temperature_data(grid=None) -> np.array:
     with 0 being 90 and 179 being 90; the third index is longitude,
     specifications unknown.
 
-    :return: Berkeley Earth surface temperature data
+    The data will default to a 1-by-1-degree grid, but can be converted to
+    other grid dimensions through the two function parameters. Only grids
+    containing integer multiples of the original grid are supported.
+
+    The grid parameter must be a tuple of two elements, the first of which is
+    for latitude and the second of which is for longitude. If the second
+    parameter is equal to 'count', then the numbers in the tuple are
+    interpreted as the number of grid cells in either dimension of the grid.
+    If the second parameter is equal to 'width', then the numbers specify
+    how many degrees each grid cell is in degrees latitude and longitude.
+
+    :param grid: Number of latitude and longitude cells in the grid in
+                 which the data is to be returned
+    :param grid_form: Either the string 'count' if the numbers in the grid
+                      correspond to the number of cells in a row of the grid,
+                      or 'width' if the numbers give the widths of each cell
+    :return: Berkeley Earth surface temperature data on the selected grid
     """
+    if grid_form == "width":
+        grid = convert_grid_format(grid)
+
     dataset = custom_readers.BerkeleyEarthTemperatureReader()
 
     data = dataset.read_newest('temperature')
     clmt = dataset.collect_untimed_data('climatology')
 
     # Translate data from the default, 1 by 1 grid to any specified grid.
-    regridded_data = _regrid_variable(dataset, data[:], grid, 1)
-    regridded_clmt = _regrid_variable(dataset, clmt[:], grid, 1)
+    regridded_data = _regrid_netcdf_variable(dataset, data[:], grid, 1)
+    regridded_clmt = _regrid_netcdf_variable(dataset, clmt[:], grid, 1)
 
     for i in range(0, 12):
         # Store arrays locally to avoid repeatedly indexing dataset.
@@ -152,7 +181,51 @@ def berkeley_temperature_data(grid=None) -> np.array:
     return regridded_data
 
 
-def static_albedo_data(grid):
+def ncar_humidity_data(grid: tuple = (180, 360),
+                       grid_form: str = "count") -> np.ndarray:
+    """
+    A data provider returning (by default) 1-degree gridded relative
+    humidity data at surface level. The data will be adjusted to a new
+    grid if one is provided.
+
+    Data is returned as a nested list structure. The outermost list has
+    12 indices, and represents months of the year. For instance, index 0
+    represents January, and index 9 is October. The second index is latitude,
+    and the third is longitude.
+
+    The data will default to a 1-by-1-degree grid, but can be converted to
+    other grid dimensions through the two function parameters. Only grids
+    containing integer multiples of the original grid are supported.
+
+    The grid parameter must be a tuple of two elements, the first of which is
+    for latitude and the second of which is for longitude. If the second
+    parameter is equal to 'count', then the numbers in the tuple are
+    interpreted as the number of grid cells in either dimension of the grid.
+    If the second parameter is equal to 'width', then the numbers specify
+    how many degrees each grid cell is in degrees latitude and longitude.
+
+    :param grid: Number of latitude and longitude cells in the grid in
+                 which the data is to be returned
+    :param grid_form: Either the string 'count' if the numbers in the grid
+                      correspond to the number of cells in a row of the grid,
+                      or 'width' if the numbers give the widths of each cell
+    :return: NCEP/NCAR surface relative humidity data
+    """
+    if grid_form == "width":
+        grid = convert_grid_format(grid)
+
+    dataset = custom_readers.NCEPHumidityReader()
+
+    humidity = dataset.read_newest('shum')
+    # Regrid the humidity variable to the specified grid, if necessary.
+    regridded_humidity = _regrid_netcdf_variable(dataset, humidity[:, :, :],
+                                                 grid, 1)
+
+    return regridded_humidity
+
+
+def static_albedo_data(grid: tuple = (180, 360),
+                       grid_form: str = "count") -> np.ndarray:
     """
     A data provider returning 1-degree gridded surface albedo data
     for land and ocean. Uses Arrhenius' albedo scheme, in which all
@@ -161,7 +234,7 @@ def static_albedo_data(grid):
     would contribute to lower global average albedo.
 
     Data is returned in a numpy array. The first index represents
-    latitude, with 0 being 90 and 179 being 90; the seconds index is
+    latitude, with 0 being -90 and 179 being 90; the second index is
     longitude, specifications unknown.
 
     :return: Static surface albedo data by Arrhenius' scheme
@@ -172,7 +245,8 @@ def static_albedo_data(grid):
     # latitude-longitude cells are primarily land.
     land_coords = dataset.collect_untimed_data('land_mask')
     # Regrid the land/ocean variable to the specified grid, if necessary.
-    regridded_land_coords = _adjust_to_grid(dataset, land_coords[::], grid)
+    regridded_land_coords = _regrid_netcdf_variable(dataset, land_coords[::],
+                                                    grid, 0)
 
     # Land values have an albedo of 1. Fill in all for now.
     land_mask = np.ones((grid[0], grid[1]), dtype=float)
@@ -190,7 +264,7 @@ def static_albedo_data(grid):
     return land_mask
 
 
-def static_absorbance_data():
+def static_absorbance_data() -> float:
     """
     A data provider that gives a single, global atmospheric heat absorbance
     value.

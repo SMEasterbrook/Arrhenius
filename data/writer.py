@@ -1,5 +1,5 @@
 from netCDF4 import Dataset
-from resources import OUTPUT_PATH
+from typing import List, Tuple, Union
 
 
 class NetCDFWriter:
@@ -8,7 +8,9 @@ class NetCDFWriter:
     of NetCDF files one variable at a time.
     """
 
-    def __init__(self, dimensions=None, data=None):
+    def __init__(self: 'NetCDFWriter',
+                 dimensions: List[tuple] = None,
+                 data: List[float] = None) -> None:
         """
         Create a new NetCDFWriter instance.
 
@@ -21,44 +23,8 @@ class NetCDFWriter:
         self._data = data
         self._var_meta = None
 
-    def dimensions(self, dims):
-        """
-        Load in a new set of variable dimensions for the next write.
-
-        Variable dimensions must be in the form of a list of tuples, where
-        each tuple contains a str followed by a type followed by an int.
-
-        The first element of each tuple, the str, represents the name of
-        the dimension (e.g. latitude, time). The type element is the type
-        that will be stored (e.g. numpy.int32). The third int type is the
-        size of the dimension, or the expected number of elements. Leave as
-        None for an unlimited size dimension.
-
-        These variable dimensions will be used as dimensions in the NetCDF
-        file upon writing. They must occur in the same order as the
-        corresponding nested list within the data list structure; that is,
-        if latitude is first in the list of dimensions, the outermost list
-        in the data list must represent latitude.
-
-        :param dims:
-            The new list of variable dimensions
-        :return:
-            This NetCDFWriter instance
-        """
-        if dims is None:
-            raise ValueError("dimensions cannot be None")
-        elif type(dims) != list:
-            raise TypeError("dimensions must be of type list")
-        elif len(dims) == 0:
-            raise ValueError("dimensions must contain at least one element")
-
-        self._dimensions = []
-        for dimension in dims:
-            self.add_dimension(dimension)
-
-        return self
-
-    def add_dimension(self, dim):
+    def add_dimension(self: 'NetCDFWriter',
+                      dim: Tuple[Union[str, type, int]]) -> 'NetCDFWriter':
         """
         Adds a new variable dimension to the end of the current list
         of dimensions.
@@ -97,7 +63,8 @@ class NetCDFWriter:
         self._dimensions.append(dim)
         return self
 
-    def data(self, data):
+    def data(self: 'NetCDFWriter',
+             data: List[float]) -> 'NetCDFWriter':
         """
         Submit a set of data that can be written to a NetCDF file.
 
@@ -128,7 +95,8 @@ class NetCDFWriter:
         self._data = data
         return self
 
-    def variable_meta(self, var_meta):
+    def variable_meta(self: 'NetCDFWriter',
+                      var_meta: Tuple[Union[int, type]]) -> 'NetCDFWriter':
         """
         Load a new set of metadata for the variable to be written.
 
@@ -154,7 +122,9 @@ class NetCDFWriter:
         self._var_meta = var_meta
         return self
 
-    def write(self, file_name, format='NETCDF4'):
+    def write(self: 'NetCDFWriter',
+              filepath: str,
+              format: str = 'NETCDF4') -> None:
         """
         Use the dimensions, variable data, and variable metadata to write a
         NetCDF file with the specified format. This file is placed in the
@@ -165,8 +135,8 @@ class NetCDFWriter:
         function exits, and so it can be called successively with different
         file name arguments without having to reload data.
 
-        :param file_name:
-            The name of the NetCDF file to be produced
+        :param filepath:
+            An absolute or relative path to the NetCDF file to be produced
         :param format:
             The file format for the NetCDF file (defaults to NetCDF4)
         """
@@ -178,8 +148,7 @@ class NetCDFWriter:
             raise ValueError("No variable metadata has been entered")
 
         # Create a new NetCDF dataset in memory.
-        file_path = OUTPUT_PATH + file_name + '.nc'
-        output_file = Dataset(file_path, 'w', format)
+        output_file = Dataset(filepath, 'w', format)
 
         # Create dimensions within the dataset.
         for dim in self._dimensions:
