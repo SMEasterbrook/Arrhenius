@@ -1,5 +1,5 @@
 DATASET_PATH = 'models/'
-OUTPUT_PATH = 'output/'
+OUTPUT_REL_PATH = 'output/'
 
 DATASETS = {
     'temperature': {
