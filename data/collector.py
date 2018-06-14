@@ -157,11 +157,14 @@ class ClimateDataCollector:
         Combines and returns all 2-dimensional gridded surface data, including
         surface temperature and surface albedo.
 
-        Data is returned in a 2-dimensional array of dictionaries, where each
-        dictionary acts like a JSON object. The temperature field in the dict
-        refers to an array of 12 monthly temperature values, with index 0
-        being January and index 11 being December. The albedo field refers to
-        the grid cell's surface albedo.
+        It is assumed that temperature and relative humidity are time
+        dependent. That is, the temperature and humidity data arrays have
+        three dimensions, the first of which is time. It is expected that
+        these two data have the same gradations of their time dimensions, e.g.
+        temperature and humidity are both measured in 3-month segments.
+
+        Meanwhile, albedo is expected to be time-independent, and only have
+        two dimensions (latitude and longitude).
 
         Raises an exception if not all of the required data providers have
         been loaded through builder methods.
@@ -178,30 +181,42 @@ class ClimateDataCollector:
 
         temp_data = self._temp_source(self._grid)
         r_hum_data = self._humidity_source(self._grid)
+
+        if len(temp_data) != len(r_hum_data):
+            raise ValueError("Temperature and humidity must have the same"
+                             "time dimensions")
+
         albedo_data = self._albedo_source(self._grid)
 
         self._grid_data = []
 
         # Start building a 2-D nested list structure for output, row by row.
-        for i in range(self._grid[0]):
-            # Holding row lists in memory prevents excess list lookups.
-            temp_row = temp_data[0][i]
-            r_hum_row = r_hum_data[0][i]
-            albedo_row = albedo_data[i]
-            # Start creating a new list column for entry into the output list.
-            longitude_row = []
 
-            for j in range(self._grid[1]):
-                temp = temp_row[j]
-                r_hum = r_hum_row[j]
-                albedo = albedo_row[j]
+        for i in range(len(temp_data)):
+            temp_time_segment = temp_data[i]
+            r_hum_time_segment = r_hum_data[i]
 
-                # Create JSON-like grid cell dictionary with gridded data.
-                grid_cell_obj = GridCell(temp, r_hum, albedo)
+            time_segment_row = []
 
-                # Add new objects into the 2-D nested lists.
-                longitude_row.append(grid_cell_obj)
-            self._grid_data.append(longitude_row)
+            for j in range(self._grid[0]):
+                # Holding row lists in memory prevents excess list lookups.
+                temp_row = temp_time_segment[j]
+                r_hum_row = r_hum_time_segment[j]
+                albedo_row = albedo_data[j]
+                # Start creating a new list column for entry into the output list.
+                longitude_row = []
+
+                for k in range(self._grid[1]):
+                    temp = temp_row[k]
+                    r_hum = r_hum_row[k]
+                    albedo = albedo_row[k]
+
+                    grid_cell_obj = GridCell(temp, r_hum, albedo)
+
+                    # Add new objects into the 2-D nested lists.
+                    longitude_row.append(grid_cell_obj)
+                time_segment_row.append(longitude_row)
+            self._grid_data.append(time_segment_row)
 
         return self._grid_data
 
