@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import List, Tuple, Union
 
 
 """
@@ -187,3 +187,163 @@ class GridCell:
             The average surface albedo within the cell
         """
         return self._albedo
+
+
+class LatLongGrid:
+    """
+    A full latitude-longitude grid, covering the surface of the Earth.
+
+    The grid is two-dimensional only, and does not include altitude levels.
+    It also represents only a snapshot in time. Additional dimensions, such
+    as atmospheric levels, can be supported by stacking multiple LatLongGrids
+    on top of each other.
+
+    Each cell in the grid stored its own set of data. Grid cells do not
+    influence adjacent grid cells.
+
+    Data for each cell is stored within an instance of the GridCell class.
+    An instance of this class should be provided fdr each cell in the grid.
+    The cells may be mutated to change values within the grid without needing
+    to create additional GridCell instances.
+    """
+    def __init__(self: 'LatLongGrid',
+                 data: List[List[GridCell]]) -> None:
+        """
+        Instantiate a new LatLongGrid instance. The dimensions of the grid
+        are inferred from the shape of the nested list in the second parameter.
+
+        The data defines the dimensions of the grid, which cannot be changed
+        later on. However, cells in the grid can be changed after the grid is
+        created, either by mutation or replacement.
+
+        :param data:
+            A nested list containing gridded data
+        """
+        self._data = data
+
+        # Iterator and caching attributes
+        self._most_recent_row = None
+        self._most_recent_row_num = -1
+        self._most_recent_col_num = -1
+
+    def __iter__(self: 'LatLongGrid'):
+        """
+        Returns an iterator over data in the grid.
+
+        The iterator begins in the furthest southwest coordinates, and returns
+        longitudinal bands one after another, heading north. For example, in a
+        grid with 10-by-20 degree cells, the iterator will start by returning
+        the cell centered at (-85, -170) latitude and longitude. It will then
+        return the cell at (-85, -150) latitude and longitude, then (-85, -130)
+        and so on until longitude 180 is reached or exceeded. Then it will
+        repeat its eastward sweep for latitude -75, then -65, and so on until
+        latitude 90 is reached or exceeded.
+
+        :return:
+            An iterator over the cells in this grid, in the order described
+            above
+        """
+        for i in range(len(self._data)):
+            row = self._data[i]
+
+            for j in range(len(row)):
+                yield row[j]
+
+    def grid_dimensions(self: 'LatLongGrid',
+                        grid_form: str = "width") -> Union[Tuple[int, int], None]:
+        """
+        Returns a two-element tuple containing the dimensions of the grid.
+        The first element represent latitude, and the second represents
+        longitude.
+
+        The optional grid_form argument allows specification of the format
+        of the grid returned. If given the value 'width' (default), then each
+        number in the tuple represents the width of a single grid cell in
+        degrees; if given the value 'count', then each number in the grid
+        is how many cells it takes to circle the globe in the appropriate
+        dimension.
+
+        Returns None if no data has been provided from which to form a grid.
+
+        :return:
+            A tuple containing the dimensions of this grid
+        """
+        if self._data is None:
+            return None
+        else:
+            grid_by_count = (len(self._data), len(self._data[0]))
+
+            if grid_form == "width":
+                return convert_grid_format(grid_by_count)
+            elif grid_form == "count":
+                return grid_by_count
+            else:
+                raise ValueError("Grid form must be either 'width' or 'count'"
+                                 "(is {})".format(grid_form))
+
+    def set_coord(self: 'LatLongGrid',
+                  x: int,
+                  y: int,
+                  val) -> None:
+        """
+        Set a new value for the cell in the grid that is x cells from the left
+        and y cells from the bottom of the grid.
+
+        Preconditions:
+            0 <= x < width of the grid
+            0 <= y < height of the grid
+
+        :param x:
+            The distance of the cell from the leftmost edge of the grid
+        :param y:
+            The distance of the cell from the bottom of the grid
+        :param val:
+            The new value for the grid cell at that position
+        """
+        if x < 0 or x > len(self._data[0]):
+            raise ValueError("X coordinate must be within the boundaries ({},"
+                             "{}), is {}".format(0, (len(self._data[0])), x))
+        elif y < 0 or y > len(self._data):
+            raise ValueError("Y coordinate must be within the boundaries ({},"
+                             "{}), is {}".format(0, (len(self._data)), y))
+
+        # Cache the most recently accessed row to prevent excessive list/array
+        # indexing in subsequent calls.
+        if self._most_recent_row_num != y:
+            self._most_recent_row_num = y
+            self._most_recent_row = self._data[y]
+
+        self._most_recent_row[x] = val
+
+    def get_coord(self: 'LatLongGrid',
+                  x: int,
+                  y: int) -> GridCell:
+        """
+        Returns the grid cell at the position that is x cells from the left
+        and y cells from the bottom of the grid.
+
+        Preconditions:
+            0 <= x < width of the grid
+            0 <= y < height of the grid
+
+        :param x:
+            The distance of the cell from the leftmost edge of the grid
+        :param y:
+            The distance of the cell from the bottom of the grid
+        :return:
+            The grid cell located at that position
+        """
+        if x < 0 or x > len(self._data[0]):
+            raise ValueError("X coordinate must be within the boundaries {},"
+                             "is {}".format(0, (len(self._data[0])), x))
+        elif y < 0 or y > len(self._data):
+            raise ValueError("Y coordinate must be within the boundaries {},"
+                             "is {}".format(0, (len(self._data)), y))
+
+        # Cache the most recently accessed row to prevent excessive list/array
+        # indexing in subsequent calls.
+        if self._most_recent_row_num != y:
+            self._most_recent_row_num = y
+            self._most_recent_row = self._data[y]
+
+        return self._most_recent_row[x]
