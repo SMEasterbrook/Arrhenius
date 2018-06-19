@@ -19,12 +19,6 @@ class ArrheniusDataReader(TimeboundNetCDFReader):
     def collect_timed_data(self, datapoint, years):
         raise NotImplementedError("Dataset does not contain timed data")
 
-    def latitude(self):
-        return self.collect_untimed_data("latitude")
-
-    def longitude(self):
-        return self.collect_untimed_data("longitude")
-
 
 class BerkeleyEarthTemperatureReader(TimeboundNetCDFReader):
     """
@@ -48,12 +42,6 @@ class BerkeleyEarthTemperatureReader(TimeboundNetCDFReader):
         start_ind = year_delta * 12
         # Slice the dataset across the selected range of years.
         return var[start_ind:start_ind + 12, :, :]
-
-    def latitude(self):
-        return self.collect_untimed_data("latitude")
-
-    def longitude(self):
-        return self.collect_untimed_data("longitude")
 
 
 class NCEPHumidityReader(TimeboundNetCDFReader):

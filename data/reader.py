@@ -84,7 +84,7 @@ class TimeboundNetCDFReader:
 
         data = self._dataset()
         var = data.variables[datapoint]
-        return var
+        return var[:]
 
     def latitude(self):
         """
@@ -92,7 +92,7 @@ class TimeboundNetCDFReader:
 
         :return: The dataset's latitude variable
         """
-        raise NotImplementedError
+        return self.collect_untimed_data("latitude")
 
     def longitude(self):
         """
@@ -100,4 +100,4 @@ class TimeboundNetCDFReader:
 
         :return: The dataset's longitude variable
         """
-        raise NotImplementedError
+        return self.collect_untimed_data("longitude")
