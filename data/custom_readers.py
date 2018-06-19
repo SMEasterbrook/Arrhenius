@@ -2,6 +2,30 @@ from data.reader import TimeboundNetCDFReader
 from data.resources import DATASET_PATH, DATASETS
 
 
+class ArrheniusDataReader(TimeboundNetCDFReader):
+    """
+    A NetCDF dataset reader designed to read from the Arrhenius Project's
+    dataset for Arrhenius' original gridded temperature and humidity data.
+
+    The dataset only contains values for one year (1895), so its data is
+    all considered two-dimensional, without any time dimension involved.
+    For this reason, temperature and humidity data can be retrieved from
+    the dataset using the collect_untimed_data method.
+    """
+    def __init__(self, format="NETCDF4"):
+        file_name = DATASET_PATH + DATASETS['arrhenius']
+        super(ArrheniusDataReader, self).__init__(file_name, format)
+
+    def collect_timed_data(self, datapoint, years):
+        raise NotImplementedError("Dataset does not contain timed data")
+
+    def latitude(self):
+        return self.collect_untimed_data("latitude")
+
+    def longitude(self):
+        return self.collect_untimed_data("longitude")
+
+
 class BerkeleyEarthTemperatureReader(TimeboundNetCDFReader):
     """
     A NetCDF dataset reader designed to read from the Berkeley Earth surface
