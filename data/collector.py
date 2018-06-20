@@ -1,6 +1,8 @@
 from typing import List, Tuple, Callable, Union
 from data.grid import LatLongGrid, GridCell, convert_grid_format
 
+from data.provider import REQUIRE_TEMP_DATA_INPUT
+
 
 # Type aliases
 CDC = 'ClimateDataCollector'
@@ -19,7 +21,18 @@ class ClimateDataCollector:
     """
 
     def __init__(self: CDC,
-                 grid: Tuple[int, int] = None) -> None:
+                 grid: Tuple[int, int] = (10, 20)) -> None:
+        """
+        Instantiate a new ClimateDataCollector instance.
+
+        Takes an optional parameter grid, which is a tuple of two integers.
+        Passing this grid parameter is equivalent to calling the constructor
+        with no arguments, and then calling load_grid with the same grid.
+
+        :param grid:
+            An optional tuple representing the grid on which data should be
+            placed
+        """
         # Provider functions that produce various types of data
         self._temp_source = None
         self._humidity_source = None
@@ -30,23 +43,28 @@ class ClimateDataCollector:
         self._grid_data = None
         self._absorbance_data = None
 
-        if grid is None:
-            # Default grid dimensions give 1 by 1 degree squares.
-            self._grid = (180, 360)
-        else:
-            self.load_grid(grid)
+        self._grid = None
+        self.load_grid(grid)
 
     def load_grid(self: CDC,
-                  grid: Tuple[int, int]) -> CDC:
+                  grid: Tuple[int, int],
+                  grid_form: str = "width") -> CDC:
         """
         Select dimensions for a new latitude and longitude grid, to which
         all gridded data is fitted. Returns the collector object, so that
         repeated builder method calls can be continued.
 
-        The grid is reported as a tuple of two elements. The first element
-        represents the latitudinal width of a single grid cell, in degrees.
-        The second element represents the longitudinal width of a grid cell,
-        also in degrees.
+        The grid is reported as a tuple of two elements. How the elements
+        are interpreted depends on the value of the optional parameter.
+        By default, and if the optional parameter is given the value 'width',
+        the first element represents the latitudinal width of a single grid
+        cell in degrees. The second element represents the longitudinal width
+        of a grid cell, also in degrees.
+
+        If the optional parameter is given the value 'count', then the first
+        element in the tuple is interpreted as the number of grid cells
+        required to circle the Earth horizontally, and the second element as
+        the number of grid cells required to circle the Earth vertically.
 
         For example, passing a tuple of (10, 10) would create a grid of
         10-by-10-degree squares, with 18 divisions of latitude and 36
@@ -56,8 +74,15 @@ class ClimateDataCollector:
         latitudinal width of 0.5 degrees) but the number of grid cells
         produced is rounded to an integer.
 
+        Preconditions:
+            len(grid) == 2
+            grid_form == 'width' or grid_form == 'count'
+
         :param grid:
             A tuple denoting the size of a grid cell
+        :param grid_form:
+            The format in which to interpret the grid, either
+            'width' or 'count'.
         """
         if grid is None:
             raise ValueError("grid must not be None")
@@ -74,7 +99,14 @@ class ClimateDataCollector:
             raise ValueError("grid elements must be numeric types"
                              "(element 1 is type {})".format(type(grid[1])))
 
-        self._grid = convert_grid_format(grid)
+        if grid_form == "width":
+            self._grid = convert_grid_format(grid)
+        elif grid_form == "count":
+            self._grid = grid
+        else:
+            raise ValueError("grid_form must be either 'width' or 'count',"
+                             "is {}".format(grid_form))
+        self._grid_data = None
         return self
 
     def use_temperature_source(self: CDC,
@@ -171,6 +203,8 @@ class ClimateDataCollector:
             An array of gridded surface data
         """
         if self._grid_data is not None:
+            # A grid was constructed with the same grid and data sources,
+            # and nothing has changed since.
             return self._grid_data
         elif self._temp_source is None:
             raise PermissionError("No temperature provider function selected")
@@ -184,7 +218,10 @@ class ClimateDataCollector:
             raise ValueError("Temperature and humidity must have the same"
                              "time dimensions")
 
-        albedo_data = self._albedo_source(temp_data, self._grid, "count")
+        if self._albedo_source in REQUIRE_TEMP_DATA_INPUT:
+            albedo_data = self._albedo_source(temp_data, self._grid, "count")
+        else:
+            albedo_data = self._albedo_source(self._grid, "count")
         self._grid_data = []
 
         # Start building a 2-D nested list structure for output, row by roW.
