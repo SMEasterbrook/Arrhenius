@@ -328,44 +328,81 @@ def ncar_humidity_data(grid: tuple = (180, 360),
     return regridded_humidity
 
 
-def static_albedo_data(grid: tuple = (180, 360),
-                       grid_form: str = "count") -> np.ndarray:
+def landmask_albedo_data(temp_data: np.ndarray,
+                         grid: Tuple[int, int] = (10, 20),
+                         grid_form: str = "width") -> np.ndarray:
     """
     A data provider returning 1-degree gridded surface albedo data
     for land and ocean. Uses Arrhenius' albedo scheme, in which all
     land has a constant albedo, and all water likewise has a constant
-    albedo. In this case snow and clouds are ignored, although they
-    would contribute to lower global average albedo.
+    albedo. In this case clouds are ignored, although they would
+    contribute to lower global average albedo.
 
     Data is returned in a numpy array. The first index represents
-    latitude, with 0 being -90 and 179 being 90; the second index is
-    longitude, specifications unknown.
+    latitude, and the second index is longitude.
 
-    :return: Static surface albedo data by Arrhenius' scheme
+    Gridded temperature data is required in the first parameter in
+    order to identify which cells are covered in snow. This data
+    should come from a temperature provider function that has been
+    passed the same grid as this function.
+
+    The returned albedo data will have the same time granularity as the
+    temperature data it is based on (i.e. monthly value if the temperature
+    is reported in monthly values).
+
+    :return:
+        Surface albedo data by Arrhenius' scheme
     """
+    if grid_form == "width":
+        grid = convert_grid_format(grid)
+    elif grid_form != "count":
+        raise ValueError("grid_form must be either 'width' or 'count'"
+                         "(is {})".format(grid_form))
+
     dataset = custom_readers.BerkeleyEarthTemperatureReader()
 
     # Berkeley Earth dataset includes variables indicating which 1-degree
     # latitude-longitude cells are primarily land.
     land_coords = dataset.collect_untimed_data('land_mask')
     # Regrid the land/ocean variable to the specified grid, if necessary.
-    regridded_land_coords = _regrid_netcdf_variable(dataset, land_coords[::],
+    regridded_land_coords = _regrid_netcdf_variable(dataset, land_coords[:],
                                                     grid, 0)
 
-    # Land values have an albedo of 1. Fill in all for now.
-    land_mask = np.ones((grid[0], grid[1]), dtype=float)
+    # Create an array of the same size as the grid, in which to store
+    # grid cell albedo values.
+    albedo_mask = np.ones((len(temp_data), grid[0], grid[1]), dtype=float)
 
-    # Correct array with the proper albedo in ocean cells.
-    ocean_albedo = (1 - 0.075)
-    for i in range(grid[0]):
-        # Cache intermediary arrays to prevent excess indexing operations.
-        coord_row = regridded_land_coords[i]
-        mask_row = land_mask[i]
+    # Albedo values used by Arrhenius in his model calculations.
+    ocean_albedo = (1.0 - 0.075)
+    land_albedo = 1.0
+    snow_albedo = 0.5
 
-        for j in range(grid[1]):
-            mask_row[j] = ocean_albedo + (coord_row[j]) * (1 - ocean_albedo)
+    # Intermediate array slices are cached at each for loop iteration
+    # to prevent excess array indexing.
+    for i in range(len(temp_data)):
+        temp_time_segment = temp_data[i]
 
-    return land_mask
+        for j in range(grid[0]):
+            landmask_row = regridded_land_coords[j]
+            temp_row = temp_time_segment[j]
+
+            for k in range(grid[1]):
+                land_percent = landmask_row[k]
+                ocean_percent = 1 - land_percent
+
+                # Grid cells are identified as containing snow based on having
+                # land at a temperature below 0 degrees celsius.
+                if temp_row[k] < 0:
+                    # Any land in this cell is interpreted as being covered in
+                    # snow.
+                    albedo_mask[i][j][k] = land_percent * snow_albedo\
+                                           + ocean_percent * ocean_albedo
+                else:
+                    # Any land in this cell is interpreted as being uncovered.
+                    albedo_mask[i][j][k] = land_percent * land_albedo\
+                                           + ocean_percent * ocean_albedo
+
+    return albedo_mask
 
 
 def static_absorbance_data() -> float:
