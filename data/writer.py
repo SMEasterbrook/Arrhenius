@@ -1,5 +1,5 @@
 from netCDF4 import Dataset
-from typing import List, Tuple, Union
+from typing import List, Union
 from numpy import ndarray
 
 
@@ -278,12 +278,12 @@ class NetCDFWriter:
               filepath: str,
               format: str = 'NETCDF4') -> None:
         """
-        Use the dimensions, variable data, and variable metadata to write a
+        Use the dimensions, variables, variable data, and attributes to write a
         NetCDF file with the specified format. This file is placed in the
         output directory specified in the resources.py file.
 
         Throws an error if not all the required pieces (dimensions, data,
-        metadata) have been entered. These pieces are not reset after the
+        variables) have been entered. These pieces are not reset after the
         function exits, and so it can be called successively with different
         file name arguments without having to reload data.
 
@@ -292,32 +292,46 @@ class NetCDFWriter:
         :param format:
             The file format for the NetCDF file (defaults to NetCDF4)
         """
-        if self._data is None:
+        if len(self._data) == 0:
             raise ValueError("No data has been submitted to be written")
         elif len(self._dimensions) == 0:
-            raise ValueError("No data dimensions have been specified")
-        elif self._var_meta is None:
-            raise ValueError("No variable metadata has been entered")
+            raise ValueError("No data dimensions have been registered")
+        elif len(self._variables) == 0:
+            raise ValueError("No variables have been registered")
+
+        for variable in self._variables:
+            if variable not in self._data:
+                raise LookupError("No data has been submitted for variable"
+                                  "{}".format(variable))
 
         # Create a new NetCDF dataset in memory.
-        output_file = Dataset(filepath, 'w', format)
+        output_dataset = Dataset(filepath, 'w', format)
+
+        # Load global attributes.
+        for attr_name, attr_val in self._global_attrs.items():
+            setattr(output_dataset, attr_name, attr_val)
 
         # Create dimensions within the dataset.
-        for dim in self._dimensions:
-            dim_name = dim[0]
-            dim_type = dim[1]
-            dim_size = dim[2]
+        for dim_name in self._dimensions:
+            dim_type = self._dimensions[dim_name][DIM_TYPE_KEY]
+            dim_size = self._dimensions[dim_name][DIM_SIZE_KEY]
 
-            output_file.createDimension(dim_name, dim_size)
-            output_file.createVariable(dim_name, dim_type, (dim_name,))
+            output_dataset.createDimension(dim_name, dim_size)
+            output_dataset.createVariable(dim_name, dim_type, (dim_name,))
 
-        var_name = self._var_meta[0]
-        var_type = self._var_meta[1]
+        for var_name in self._variables:
+            var_type = self._variables[var_name][VAR_TYPE_KEY]
+            var_dims = tuple(self._variables[var_name][VAR_DIMS_KEY])
+            var_attrs = self._variables[var_name][VAR_ATTR_KEY]
 
-        # Load the main variable data into the dataset, using all dimensions.
-        all_dims = tuple([dim[0] for dim in self._dimensions])
-        one_var = output_file.createVariable(var_name, var_type, all_dims)
-        one_var[:] = self._data
+            # Load the main variable data into the dataset, using all dimensions.
+            var = output_dataset.createVariable(var_name, var_type, var_dims)
+
+            # Load variable attributes.
+            for attr_name, attr_val in var_attrs.items():
+                setattr(var, attr_name, attr_val)
+
+            var[:] = self._data[var_name]
 
         # Finally, write the file to disk.
-        output_file.close()
+        output_dataset.close()
