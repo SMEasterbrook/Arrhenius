@@ -1,6 +1,6 @@
 from data import custom_readers
 from data.grid import convert_grid_format
-from typing import List, Union
+from typing import List, Tuple, Union
 
 import numpy as np
 import pyresample
@@ -33,7 +33,7 @@ STATIC_ATM_H2O = None
 STATIC_ATM_ABSORBANCE = 0.70
 
 
-def _adjust_latlong_grid(dataset: 'TimeboundNetCDFReader',
+def _adjust_latlong_grid(dataset: 'custom_readers.NetCDFReader',
                          data_var: np.ndarray,
                          grid: tuple) -> np.ndarray:
     """
@@ -78,7 +78,7 @@ def _adjust_latlong_grid(dataset: 'TimeboundNetCDFReader',
     return final_img.image_data
 
 
-def _regrid_netcdf_variable(dataset: 'TimeboundNetCDFReader',
+def _regrid_netcdf_variable(dataset: 'custom_readers.NetCDFReader',
                             data_var: np.ndarray,
                             grid: tuple,
                             dim_count: int) -> Union[List, np.ndarray]:
@@ -121,6 +121,56 @@ def _regrid_netcdf_variable(dataset: 'TimeboundNetCDFReader',
             return new_grid
 
 
+def arrhenius_temperature_data(grid: Tuple[int, int] = (10, 20),
+                               grid_form: str = "width") -> np.ndarray:
+    """
+    A data provider returning temperature data from Arrhenius' original
+    1895 dataset.
+
+    Data is gridded on a 10x20 degree latitude-longitude grid, and so any
+    attempts to regrid to a finer grid will produce grainy results. Data is
+    divided into four time segments of each a season long, for a total of
+    one year of data coverage.
+
+    Not all grid cells have values, especially in the Arctic and Antarctic
+    circles. These missing values are present as NaN in the array returned.
+
+    The data will default to a 10x20 degree grid, but can be converted to
+    other grid dimensions through the two function parameters. Only grids
+    containing integer multiples of the original grid are supported.
+
+    The grid parameter must be a tuple of two elements, the first of which is
+    for latitude and the second of which is for longitude. If the second
+    parameter is equal to 'count', then the numbers in the tuple are
+    interpreted as the number of grid cells in either dimension of the grid.
+    If the second parameter is equal to 'width', then the numbers specify
+    how many degrees each grid cell is in degrees latitude and longitude.
+
+    :param grid:
+        Tuple representing latitude and longitude dimensions of the grid
+        on which the data is to be returned
+    :param grid_form:
+        Either the string 'count' if the numbers in the grid correspond to
+        the number of cells in a row of the grid, or 'width' if the numbers
+        give the widths of each cell in degrees
+    :return:
+        Temperature data from Arrhenius' original dataset
+    """
+    if grid_form == "width":
+        grid = convert_grid_format(grid)
+    elif grid_form != "count":
+        raise ValueError("grid_form must be either 'width' or 'count'"
+                         "(is {})".format(grid_form))
+
+    dataset = custom_readers.ArrheniusDataReader()
+
+    data = dataset.collect_untimed_data("temperature")
+    # Regrid the humidity variable to the specified grid, if necessary.
+    regridded_data = _regrid_netcdf_variable(dataset, data[:], grid, 1)
+
+    return regridded_data
+
+
 def berkeley_temperature_data(grid: tuple = (180, 360),
                               grid_form: str = "count") -> np.array:
     """
@@ -154,6 +204,9 @@ def berkeley_temperature_data(grid: tuple = (180, 360),
     """
     if grid_form == "width":
         grid = convert_grid_format(grid)
+    elif grid_form != "count":
+        raise ValueError("grid_form must be either 'width' or 'count'"
+                         "(is {})".format(grid_form))
 
     dataset = custom_readers.BerkeleyEarthTemperatureReader()
 
@@ -177,6 +230,54 @@ def berkeley_temperature_data(grid: tuple = (180, 360),
                 # Only one array index required per addition instead
                 # of three gives significant performance increases.
                 data_by_lat[k] += clmt_by_lat[k]
+
+    return regridded_data
+
+
+def arrhenius_humidity_data(grid: Tuple[int, int] = (10, 20),
+                            grid_form: str = "width") -> np.ndarray:
+    """
+    A data provider returning relative humidity data from Arrhenius' original
+    1895 dataset.
+
+    Data is gridded on a 10x20 degree latitude-longitude grid, and so any
+    attempts to regrid to a finer grid will produce grainy results. Data is
+    divided into four time segments of each a season long, for a total of
+    one year of data coverage.
+
+    Not all grid cells have values, especially in the Arctic and Antarctic
+    circles. These missing values are present as NaN in the array returned.
+
+    The data will default to a 10x20 degree grid, but can be converted to
+    other grid dimensions through the two function parameters. Only grids
+    containing integer multiples of the original grid are supported.
+
+    The grid parameter must be a tuple of two elements, the first of which is
+    for latitude and the second of which is for longitude. If the second
+    parameter is equal to 'count', then the numbers in the tuple are
+    interpreted as the number of grid cells in either dimension of the grid.
+    If the second parameter is equal to 'width', then the numbers specify
+    how many degrees each grid cell is in degrees latitude and longitude.
+
+    :param grid:
+        Tuple representing latitude and longitude dimensions of the grid
+        on which the data is to be returned
+    :param grid_form:
+        Either the string 'count' if the numbers in the grid correspond to
+        the number of cells in a row of the grid, or 'width' if the numbers
+        give the widths of each cell in degrees
+    :return:
+        Relative humidity data from Arrhenius' original dataset
+    """
+    if grid_form == "width":
+        grid = convert_grid_format(grid)
+    elif grid_form != "count":
+        raise ValueError("grid_form must be either 'width' or 'count'"
+                         "(is {})".format(grid_form))
+
+    dataset = custom_readers.ArrheniusDataReader()
+    data = dataset.collect_untimed_data("rel_humidity")
+    regridded_data = _regrid_netcdf_variable(dataset, data[:], grid, 1)
 
     return regridded_data
 
@@ -213,6 +314,9 @@ def ncar_humidity_data(grid: tuple = (180, 360),
     """
     if grid_form == "width":
         grid = convert_grid_format(grid)
+    elif grid_form != "count":
+        raise ValueError("grid_form must be either 'width' or 'count'"
+                         "(is {})".format(grid_form))
 
     dataset = custom_readers.NCEPHumidityReader()
 
