@@ -244,8 +244,8 @@ class NetCDFWriter:
         return self
 
     def data(self: 'NetCDFWriter',
-             data: ndarray,
-             var_name: str) -> 'NetCDFWriter':
+             var_name: str,
+             data: ndarray) -> 'NetCDFWriter':
         """
         Submit a set of data that can be written to a NetCDF file.
 
@@ -265,7 +265,7 @@ class NetCDFWriter:
         """
         if data is None:
             raise ValueError("data cannot be None")
-        elif type(data) != list:
+        elif type(data) != ndarray:
             raise TypeError("data must be of type list")
         elif var_name not in self._variables:
             raise KeyError("var_name ({}) has not been registered as a"

@@ -387,4 +387,6 @@ class LatLongGrid:
             for cell in row:
                 converted_row.append(extractor_func(cell))
 
+            converted_data.append(converted_row)
+
         return np.array(converted_data)
