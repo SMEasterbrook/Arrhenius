@@ -2,11 +2,10 @@ from netCDF4 import Dataset
 from datetime import datetime
 
 
-class TimeboundNetCDFReader:
+class NetCDFReader:
     """
     A dataset reader for NetCDF files. Provides read-only access to existing
-    NetCDF data. Tailored for datasets that have a notion of time, with
-    methods of accepting data from only certain years.
+    NetCDF data.
     """
     def __init__(self, file_name, format="NETCDF4"):
         """
@@ -31,41 +30,8 @@ class TimeboundNetCDFReader:
                                  self._file_format)
 
     def _dataset(self):
+        """ Returns the reader's underlying Dataset object. """
         return self._data
-
-    def read_newest(self, datapoint):
-        """
-        Retrieve the data under the heading specified by var, limited to the
-        current year. Only applies to datasets that have a time value for
-        every datapoint.
-
-        :param datapoint:
-            The heading of the data desired from the dataset
-        :return:
-            The requested data, taken only for the past year
-        """
-        today = datetime.now()
-        this_year = int(today.year)
-        data_now = self.collect_timed_data(datapoint, this_year - 1)
-
-        return data_now
-
-    def collect_timed_data(self, datapoint, years):
-        """
-        Returns the data under the specified header, taken from the selected
-        range of years.
-
-        Subclasses must provide a data-set specific override of this method,
-        since different datasets may have different structures.
-
-        :param datapoint:
-            The heading of the required data
-        :param years:
-            The range of years from which to collect data
-        :return:
-            The requested data, limited to that from the selected years
-        """
-        raise NotImplementedError
 
     def collect_untimed_data(self, datapoint):
         """
@@ -101,3 +67,46 @@ class TimeboundNetCDFReader:
         :return: The dataset's longitude variable
         """
         return self.collect_untimed_data("longitude")
+
+
+class TimeboundNetCDFReader(NetCDFReader):
+    """
+    A dataset reader for NetCDF files, tailored for datasets that have a
+    notion of time. In addition to regular data access methods from the
+    NetCDFReader superclass, provides additional methods of accessing
+    data from only certain years.
+    """
+
+    def read_newest(self, datapoint):
+        """
+        Retrieve the data under the variable specified by var, limited to the
+        current year. Only applies to datasets that have a time value for
+        at least the requested datapoint.
+
+        :param datapoint:
+            The name of the variable requested from the dataset
+        :return:
+            The requested data, taken only for the most reent year
+        """
+        today = datetime.now()
+        this_year = int(today.year)
+        data_now = self.collect_timed_data(datapoint, this_year - 1)
+
+        return data_now
+
+    def collect_timed_data(self, datapoint, year):
+        """
+        Returns the data under the specified header, taken from the selected
+        year.
+
+        Subclasses must provide a data-set specific override of this method,
+        since different datasets may have different structures.
+
+        :param datapoint:
+            The name of the variable requested from the dataset
+        :param year:
+            The year from which to collect data
+        :return:
+            The requested data, limited to that from the selected years
+        """
+        raise NotImplementedError

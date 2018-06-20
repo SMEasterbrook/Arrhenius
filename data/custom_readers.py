@@ -1,8 +1,8 @@
-from data.reader import TimeboundNetCDFReader
+from data.reader import NetCDFReader, TimeboundNetCDFReader
 from data.resources import DATASET_PATH, DATASETS
 
 
-class ArrheniusDataReader(TimeboundNetCDFReader):
+class ArrheniusDataReader(NetCDFReader):
     """
     A NetCDF dataset reader designed to read from the Arrhenius Project's
     dataset for Arrhenius' original gridded temperature and humidity data.
@@ -15,9 +15,6 @@ class ArrheniusDataReader(TimeboundNetCDFReader):
     def __init__(self, format="NETCDF4"):
         file_name = DATASET_PATH + DATASETS['arrhenius']
         super(ArrheniusDataReader, self).__init__(file_name, format)
-
-    def collect_timed_data(self, datapoint, years):
-        raise NotImplementedError("Dataset does not contain timed data")
 
 
 class BerkeleyEarthTemperatureReader(TimeboundNetCDFReader):
