@@ -1,27 +1,28 @@
 from netCDF4 import Dataset
 from typing import List, Tuple, Union
+from numpy import ndarray
+
+
+DIM_TYPE_KEY = 'type'
+DIM_SIZE_KEY = 'size'
+
+VAR_TYPE_KEY = 'type'
+VAR_DIMS_KEY = 'dims'
 
 
 class NetCDFWriter:
     """
     A general NetCDF data writer, capable of writing various formats
-    of NetCDF files one variable at a time.
+    of NetCDF files with multiple dimensions and variables.
     """
 
-    def __init__(self: 'NetCDFWriter',
-                 dimensions: List[tuple] = None,
-                 data: List[float] = None) -> None:
+    def __init__(self: 'NetCDFWriter') -> None:
         """
         Create a new NetCDFWriter instance.
-
-        :param dimensions:
-            A starting set of variable dimensions to use
-        :param data:
-            A starting dataset to write
         """
-        self._dimensions = [] if dimensions is None else dimensions
-        self._data = data
-        self._var_meta = None
+        self._data = {}
+        self._dimensions = {}
+        self._variables = {}
 
     def add_dimension(self: 'NetCDFWriter',
                       dim: Tuple[Union[str, type, int]]) -> 'NetCDFWriter':
@@ -37,9 +38,6 @@ class NetCDFWriter:
         that will be stored (e.g. numpy.int32). The third int type is the
         size of the dimension, or the expected number of elements. Leave as
         None for an unlimited size dimension.
-
-        The nth dimension added will correspond to the nth nested layer of
-        lists within the data list.
 
         :param dim:
             A new variable dimension
@@ -57,53 +55,28 @@ class NetCDFWriter:
                 or type(dim[2]) != int:
             raise ValueError("dim must contain a str followed by "
                              "a type followed by an int")
-        elif dim in self._dimensions:
+        elif dim[0] in self._dimensions:
             raise ValueError("Dimension {} already present".format(dim[0]))
 
-        self._dimensions.append(dim)
+        self._dimensions[dim[0]] = {
+            DIM_TYPE_KEY: dim[1],
+            DIM_SIZE_KEY: dim[2]
+        }
+
         return self
 
-    def data(self: 'NetCDFWriter',
-             data: List[float]) -> 'NetCDFWriter':
-        """
-        Submit a set of data that can be written to a NetCDF file.
-
-        Only a single point of data can be loaded at once, which means that
-        if multiple variables must be added to the file, they must be added
-        separately, possibly with new variable dimensions and metadata.
-
-        The data must be in the form of a multilevel nested list, where all
-        the lists at a certain level have the same length. Intuitively, the
-        lists must be arranged like an n-dimensional array.
-
-        The nth layer of nested lists is interpreted according to the nth
-        variable dimension that was loaded. Therefore, the types and sizes
-        must match up. This is evaluated upon calling for the write to take
-        place, and so no warnings are given if dimensions and data do not
-        match.
-
-        :param data:
-            A new variable worth of data to add into the NetCDF file
-        :return:
-            This NetCDFWriter instance
-        """
-        if data is None:
-            raise ValueError("data cannot be None")
-        elif type(data) != list:
-            raise TypeError("data must be of type list")
-
-        self._data = data
-        return self
-
-    def variable_meta(self: 'NetCDFWriter',
-                      var_meta: Tuple[Union[int, type]]) -> 'NetCDFWriter':
+    def add_variable(self: 'NetCDFWriter',
+                     var_meta: Tuple[Union[str, type, List[str]]]) -> 'NetCDFWriter':
         """
         Load a new set of metadata for the variable to be written.
 
-        This metadata must be in the form of a tuple containing two elements.
+        This metadata must be in the form of a tuple containing three elements.
         The first element, a str, is the name of the variable. The second, a
         type, is the type (e.g. numpy.int32) with which the data will be
-        written.
+        written. The third element, a list of str, contains the dimensions on
+        which the variable is based, in the order in which they appear in the
+        variable's data array. For instance, the dimension associated with the
+        primary index in the data array should be the first element in the list.
 
         :param var_meta:
             Metadata about the main variable that will be written
@@ -119,7 +92,42 @@ class NetCDFWriter:
             raise ValueError("var_meta must contain two elements:\
                               a str followed by a type")
 
-        self._var_meta = var_meta
+        self._variables[var_meta[0]] = {
+            VAR_TYPE_KEY: var_meta[1],
+            VAR_DIMS_KEY: var_meta[2]
+        }
+
+        return self
+
+    def data(self: 'NetCDFWriter',
+             data: ndarray,
+             var_name: str) -> 'NetCDFWriter':
+        """
+        Submit a set of data that can be written to a NetCDF file.
+
+        The data should be passed in as either an array or an array-like
+        structure. The number of dimensions to the array should be equal
+        to the number of dimensions associated with variable var_name.
+
+        Precondition:
+            var_name has already been registered as a variable
+
+        :param data:
+            A new variable worth of data to add into the NetCDF file
+        :param var_name:
+            The name of the variable with which the data will be associated
+        :return:
+            This NetCDFWriter instance
+        """
+        if data is None:
+            raise ValueError("data cannot be None")
+        elif type(data) != list:
+            raise TypeError("data must be of type list")
+        elif var_name not in self._variables:
+            raise KeyError("var_name ({}) has not been registered as a"
+                           "variable".format(var_name))
+
+        self._data[var_name] = data
         return self
 
     def write(self: 'NetCDFWriter',
