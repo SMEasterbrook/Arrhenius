@@ -25,76 +25,119 @@ class NetCDFWriter:
         self._variables = {}
 
     def add_dimension(self: 'NetCDFWriter',
-                      dim: Tuple[Union[str, type, int]]) -> 'NetCDFWriter':
+                      dim_name: str,
+                      dim_type: type,
+                      dim_size: Union[int, None]) -> 'NetCDFWriter':
         """
         Adds a new variable dimension to the end of the current list
         of dimensions.
 
-        A variable dimension must be a tuple of length 3, where the first
-        element is a str, the second is a type, and the third is an int.
-
-        The first element of each tuple, the str, represents the name of
-        the dimension (e.g. latitude, time). The type element is the type
-        that will be stored (e.g. numpy.int32). The third int type is the
-        size of the dimension, or the expected number of elements. Leave as
-        None for an unlimited size dimension.
-
-        :param dim:
-            A new variable dimension
+        :param dim_name:
+            The name of the new dimension
+        :param dim_type:
+            The type of the new dimension's values
+        :param dim_size:
+            The number of entries in the dimension, or None if the dimension
+            is to have unlimited size
         :return:
             This NetCDFWriter instance
         """
-        if dim is None:
-            raise ValueError("dim cannot be None")
-        elif type(dim) != tuple:
-            raise TypeError("dim must be of type tuple")
-        elif len(dim) != 3:
-            raise ValueError("dim must contain exactly 3 elements")
-        elif type(dim[0]) != str \
-                or type(dim[1]) != type\
-                or type(dim[2]) != int:
-            raise ValueError("dim must contain a str followed by "
-                             "a type followed by an int")
-        elif dim[0] in self._dimensions:
-            raise ValueError("Dimension {} already present".format(dim[0]))
+        # Integrity checks for variable name.
+        if dim_name is None:
+            raise ValueError("Variable name must not be None")
+        elif type(dim_name) != str:
+            raise TypeError("Variable name must be of type str"
+                            " (is {})".format(type(dim_name)))
+        elif dim_name == '':
+            raise ValueError("Variable name must be non-empty")
 
-        self._dimensions[dim[0]] = {
-            DIM_TYPE_KEY: dim[1],
-            DIM_SIZE_KEY: dim[2]
+        # Integrity checks for variable type.
+        if dim_type is None:
+            raise ValueError("Variable type must not be None")
+        elif type(dim_type) != type:
+            raise TypeError("Variable name must be of type type"
+                            " (is {})".format(type(dim_type)))
+
+        # Integrity checks for variable dimensions.
+        if dim_size is not None:
+            if type(dim_size) != int:
+                raise TypeError("Variable dimensions must be of type int"
+                                " (is {})".format(type(dim_size)))
+            elif dim_size < 1:
+                raise ValueError("Dimension size must be greater than 0"
+                                 "(is {})".format(dim_size))
+
+        self._dimensions[dim_name] = {
+            DIM_TYPE_KEY: dim_type,
+            DIM_SIZE_KEY: dim_size
         }
 
         return self
 
-    def add_variable(self: 'NetCDFWriter',
-                     var_meta: Tuple[Union[str, type, List[str]]]) -> 'NetCDFWriter':
+    def variable(self: 'NetCDFWriter',
+                 var_name: str,
+                 var_type: type,
+                 var_dims: List[str]) -> 'NetCDFWriter':
         """
-        Load a new set of metadata for the variable to be written.
+        Add a new variable to be written, or replace any existing variable with
+        the same name.
 
-        This metadata must be in the form of a tuple containing three elements.
-        The first element, a str, is the name of the variable. The second, a
-        type, is the type (e.g. numpy.int32) with which the data will be
-        written. The third element, a list of str, contains the dimensions on
-        which the variable is based, in the order in which they appear in the
-        variable's data array. For instance, the dimension associated with the
-        primary index in the data array should be the first element in the list.
+        The last argument specifies all the dimensions associated with this new
+        variable. Each dimension must have already been registered in this
+        Writer or else a ValueError will be raised.
 
-        :param var_meta:
-            Metadata about the main variable that will be written
+        Dimensions in the list should be in the same order as they appear in
+        the variable's actual data. For example, if the first dimension in a
+        variable's data array is time, then 'time' should be the first element
+        in the dimensions list. It will be written to the file as such.
+
+        :param var_name:
+            The name of the new variable
+        :param var_type:
+            The type of the new variable
+        :param var_dims:
+            The list of dimensions associated with the new variable, in order of
+            appearance in the variable's data array
         :return:
             This NetCDFWriter instance
         """
-        if var_meta is None:
-            raise ValueError("var_meta cannot be None")
-        elif type(var_meta) != tuple:
-            raise TypeError("var_meta must be of type tuple")
-        elif len(var_meta) != 2 or\
-                (type(var_meta[0]) != str and type(var_meta[1]) != type):
-            raise ValueError("var_meta must contain two elements:\
-                              a str followed by a type")
+        # Integrity checks for variable name.
+        if var_name is None:
+            raise ValueError("Variable name must not be None")
+        elif type(var_name) != str:
+            raise TypeError("Variable name must be of type str"
+                            " (is {})".format(type(var_name)))
+        elif var_name == '':
+            raise ValueError("Variable name must be non-empty")
 
-        self._variables[var_meta[0]] = {
-            VAR_TYPE_KEY: var_meta[1],
-            VAR_DIMS_KEY: var_meta[2]
+        # Integrity checks for variable type.
+        if var_type is None:
+            raise ValueError("Variable type must not be None")
+        elif type(var_type) != type:
+            raise TypeError("Variable name must be of type type"
+                            " (is {})".format(type(var_type)))
+
+        # Integrity checks for variable dimensions.
+        if var_dims is None:
+            # None is considered as a way of specifying empty dimensions.
+            var_dims = []
+        if type(var_dims) != list:
+            raise TypeError("Variable dimensions must be of type list"
+                            " (is {})".format(type(var_dims)))
+
+        # Integrity checks for each dimension listed for the variable.
+        for i in range(len(var_dims)):
+            dim = var_dims[i]
+            if type(dim) != str:
+                raise TypeError("All variable dimensions must be type str"
+                                " (index {} is {})".format(i, type(dim)))
+            elif dim not in self._dimensions:
+                raise ValueError("All variable dimensions must be registered"
+                                 " as data dimensions ({} is not)".format(dim))
+
+        self._variables[var_name] = {
+            VAR_TYPE_KEY: var_type,
+            VAR_DIMS_KEY: var_dims
         }
 
         return self
