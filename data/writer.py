@@ -24,13 +24,17 @@ class NetCDFWriter:
         self._dimensions = {}
         self._variables = {}
 
-    def add_dimension(self: 'NetCDFWriter',
-                      dim_name: str,
-                      dim_type: type,
-                      dim_size: Union[int, None]) -> 'NetCDFWriter':
+    def dimension(self: 'NetCDFWriter',
+                  dim_name: str,
+                  dim_type: type,
+                  dim_size: Union[int, None]) -> 'NetCDFWriter':
         """
         Adds a new variable dimension to the end of the current list
         of dimensions.
+
+        Preconditions:
+            dim_name != ''
+            dim_size > 0
 
         :param dim_name:
             The name of the new dimension
@@ -42,28 +46,28 @@ class NetCDFWriter:
         :return:
             This NetCDFWriter instance
         """
-        # Integrity checks for variable name.
+        # Integrity checks for dimension name.
         if dim_name is None:
-            raise ValueError("Variable name must not be None")
+            raise ValueError("Dimension name must not be None")
         elif type(dim_name) != str:
-            raise TypeError("Variable name must be of type str"
+            raise TypeError("Dimension name must be of type str"
                             " (is {})".format(type(dim_name)))
         elif dim_name == '':
-            raise ValueError("Variable name must be non-empty")
+            raise ValueError("Dimension name must be a non-empty string")
 
-        # Integrity checks for variable type.
+        # Integrity checks for dimension type.
         if dim_type is None:
-            raise ValueError("Variable type must not be None")
+            raise ValueError("Dimension type must not be None")
         elif type(dim_type) != type:
-            raise TypeError("Variable name must be of type type"
+            raise TypeError("Dimension type must be of type type"
                             " (is {})".format(type(dim_type)))
 
-        # Integrity checks for variable dimensions.
+        # Integrity checks for dimension size.
         if dim_size is not None:
             if type(dim_size) != int:
-                raise TypeError("Variable dimensions must be of type int"
+                raise TypeError("Dimension size must be of type int or None"
                                 " (is {})".format(type(dim_size)))
-            elif dim_size < 1:
+            elif dim_size <= 0:
                 raise ValueError("Dimension size must be greater than 0"
                                  "(is {})".format(dim_size))
 
@@ -114,7 +118,7 @@ class NetCDFWriter:
         if var_type is None:
             raise ValueError("Variable type must not be None")
         elif type(var_type) != type:
-            raise TypeError("Variable name must be of type type"
+            raise TypeError("Variable type must be of type type"
                             " (is {})".format(type(var_type)))
 
         # Integrity checks for variable dimensions.
