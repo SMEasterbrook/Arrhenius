@@ -56,6 +56,54 @@ def convert_grid_format(grid: Tuple[int, int]) -> Tuple[int, int]:
         return new_lat, new_lon
 
 
+def extract_multidimensional_grid_variable(grids: Union[list, 'LatLongGrid'],
+                                           datapoint: str,
+                                           dim_count: int = 3) -> np.ndarray:
+    """
+    Extract a datapoint from a multidimensional nested list of grids, returning
+    an array of that datapoint. The array will have the same dimensions as the
+    original list, extended with the dimensions of the grids contained.
+
+    For example, calling the function with a list of four 10x20 grids, and
+    requesting the variable 'temperature', will return a 4x10x20 array of
+    temperature values of cells in the four grids.
+
+    An optional parameter dim_count allows specification of the number of total
+    dimensions to the data. A single grid instance is considered to have two
+    dimensions, latitude and longitude. A list of grids has three dimensions,
+    a list of list of grids has four, etc. Be careful to match up the dim_count
+    parameter's value with the actual number of dimensions of the data, or else
+    errors will be raised.
+
+    Precondition:
+        dim_count >= 2
+
+    :param grids:
+        Either an instance of LatLongGrid if dim_count == 2, or a nested list
+        of LatLongGrid if dim_count > 2
+    :param datapoint:
+        The name of the data variable requested from the grids
+    :param dim_count:
+        The number of dimensions to the data
+    :return:
+        An array containing the requested datapoint, structured in the same
+        dimensions as the original grids argument
+    """
+    if dim_count < 2:
+        raise ValueError("Grids must posess at least two dimensions"
+                         "(provided {})".format(dim_count))
+    elif dim_count == 2:
+        return grids.extract_datapoint(datapoint)
+    else:
+        grid_values = []
+
+        for grid in grids:
+            grid_values.append(extract_multidimensional_grid_variable(
+                grid, datapoint, dim_count - 1))
+
+        return np.array(grid_values)
+
+
 class GridCell:
     """
     A single cell within a latitude-longitude grid overlaid over Planet Earth.
