@@ -8,6 +8,7 @@ DIM_SIZE_KEY = 'size'
 
 VAR_TYPE_KEY = 'type'
 VAR_DIMS_KEY = 'dims'
+VAR_ATTR_KEY = 'attrs'
 
 
 class NetCDFWriter:
@@ -23,6 +24,46 @@ class NetCDFWriter:
         self._data = {}
         self._dimensions = {}
         self._variables = {}
+
+        self._global_attrs = {}
+
+    def global_attribute(self: 'NetCDFWriter',
+                         attr_name: str,
+                         attr_val: str) -> 'NetCDFWriter':
+        """
+        Register a global attribute to be added to the NetCDF output file.
+        For example, the attribute 'description' may refer to the string
+        'A dataset containing 10x20 degree gridded temperature and humidity
+        data used in Arrhenius' 1895 climate model.'
+
+        Preconditions:
+            attr_name != ''
+
+        :param attr_name:
+            The name of the new global attribute
+        :param attr_val:
+            The value of the new global attribute
+        :return:
+            This NetCDFWriter instance
+        """
+        # Integrity checks for attribute name.
+        if attr_name is None:
+            raise ValueError("Attrribute name must not be None")
+        elif type(attr_name) != str:
+            raise TypeError("Attribute name must be of type str"
+                            " (is {})".format(type(attr_name)))
+        elif attr_name == '':
+            raise ValueError("Attribute name must be a non-empty string")
+
+        # Integrity checks for attribute value.
+        if attr_val is None:
+            raise ValueError("Attribute value must not be None")
+        elif type(attr_val) != str:
+            raise TypeError("Attribute value must be of type str"
+                            " (is {})".format(type(attr_val)))
+
+        self._global_attrs[attr_name] = attr_val
+        return self
 
     def dimension(self: 'NetCDFWriter',
                   dim_name: str,
@@ -95,6 +136,10 @@ class NetCDFWriter:
         variable's data array is time, then 'time' should be the first element
         in the dimensions list. It will be written to the file as such.
 
+        Preconditions:
+            var_name != ''
+            each element of var_dims must be registered as a dimension
+
         :param var_name:
             The name of the new variable
         :param var_type:
@@ -141,9 +186,61 @@ class NetCDFWriter:
 
         self._variables[var_name] = {
             VAR_TYPE_KEY: var_type,
-            VAR_DIMS_KEY: var_dims
+            VAR_DIMS_KEY: var_dims,
+            VAR_ATTR_KEY: {}
         }
 
+        return self
+
+    def variable_attribute(self: 'NetCDFWriter',
+                           var_name: str,
+                           attr_name: str,
+                           attr_val: str) -> 'NetCDFWriter':
+        """
+        Register an attribute to be added to the NetCDF output file, associated
+        with the variable var_name.
+        For example, the attribute 'units' for variable latitude may refer to
+        the string 'Degrees north of the equator.'
+
+        Preconditions:
+            var_name must be registered as a variable
+            attr_name != ''
+
+        :param var_name:
+            The name of the variable to which the attribute will be associated
+        :param attr_name:
+            The name of the new attribute
+        :param attr_val:
+            The value of the new attribute
+        :return:
+            This NetCDFWriter instance
+        """
+        # Integrity checks for variable name.
+        if var_name is None:
+            raise ValueError("Variable name must not be None")
+        elif type(var_name) != str:
+            raise TypeError("Variable name must be of type str"
+                            " (is {})".format(type(var_name)))
+        elif var_name not in self._variables:
+            raise ValueError("Variable {} not registered".format(var_name))
+
+        # Integrity checks for attribute name.
+        if attr_name is None:
+            raise ValueError("Attrribute name must not be None")
+        elif type(attr_name) != str:
+            raise TypeError("Attribute name must be of type str"
+                            " (is {})".format(type(attr_name)))
+        elif attr_name == '':
+            raise ValueError("Attribute name must be a non-empty string")
+
+        # Integrity checks for attribute value.
+        if attr_val is None:
+            raise ValueError("Attribute value must not be None")
+        elif type(attr_val) != str:
+            raise TypeError("Attribute value must be of type str"
+                            " (is {})".format(type(attr_val)))
+
+        self._variables[var_name][VAR_ATTR_KEY][attr_name] = attr_val
         return self
 
     def data(self: 'NetCDFWriter',
