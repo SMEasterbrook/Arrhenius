@@ -420,3 +420,6 @@ def static_absorbance_data() -> float:
         Arrhenius' atmospheric absorbance coefficient
     """
     return STATIC_ATM_ABSORBANCE
+
+
+REQUIRE_TEMP_DATA_INPUT = [landmask_albedo_data]
