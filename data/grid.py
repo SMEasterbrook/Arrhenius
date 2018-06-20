@@ -1,3 +1,4 @@
+import numpy as np
 from typing import List, Tuple, Union
 
 
@@ -189,6 +190,16 @@ class GridCell:
         return self._albedo
 
 
+# Converter from string to GridCell method for accessing the attribute named
+# by the string. Used so that multiple short-forms can be used for each
+# attribute, such as 'temp' for temperature.
+VAR_NAME_TO_EXTRACTOR = {
+    'temperature': GridCell.get_temperature,
+    'humidity': GridCell.get_relative_humidity,
+    'albedo': GridCell.get_albedo
+}
+
+
 class LatLongGrid:
     """
     A full latitude-longitude grid, covering the surface of the Earth.
@@ -347,3 +358,33 @@ class LatLongGrid:
             self._most_recent_row = self._data[y]
 
         return self._most_recent_row[x]
+
+    def extract_datapoint(self: 'LatLongGrid',
+                          datapoint: str) -> np.ndarray:
+        """
+        Produce a gridded array of the same shape as this grid, but containing
+        only the specified datapoint in each cell.
+
+        For example, if called on a grid of dimensions 180x360 with argument
+        'temperature', returns a 180x360 array containing the temperature
+        values in each cell.
+
+        Precondition:
+            datapoint matches up with a attribute in GridCell (i.e. datapoint
+            is in ['temperature', 'humidity', 'albedo'])
+
+        :param datapoint:
+        :return:
+        """
+        converted_data = []
+
+        # Stores the GridCell getter method to get the requested attribute.
+        extractor_func = VAR_NAME_TO_EXTRACTOR[datapoint]
+
+        # Loop through grid cells to get the requested datapoint from each.
+        for row in self._data:
+            converted_row = []
+            for cell in row:
+                converted_row.append(extractor_func(cell))
+
+        return np.array(converted_data)
