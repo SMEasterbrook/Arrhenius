@@ -1,6 +1,6 @@
 from data import custom_readers
 from data.grid import convert_grid_format
-from typing import List, Tuple, Union
+from typing import Tuple
 
 import numpy as np
 import pyresample
@@ -35,7 +35,7 @@ STATIC_ATM_ABSORBANCE = 0.70
 
 def _adjust_latlong_grid(dataset: 'custom_readers.NetCDFReader',
                          data_var: np.ndarray,
-                         grid: tuple) -> np.ndarray:
+                         grid: Tuple[int, int] = (10, 20)) -> np.ndarray:
     """
     Translate a latitude-longitude variable from its native grid to the
     specified grid dimensions.
@@ -80,15 +80,19 @@ def _adjust_latlong_grid(dataset: 'custom_readers.NetCDFReader',
 
 def _regrid_netcdf_variable(dataset: 'custom_readers.NetCDFReader',
                             data_var: np.ndarray,
-                            grid: tuple,
-                            dim_count: int) -> Union[List, np.ndarray]:
+                            grid: Tuple[int, int] = (10, 20),
+                            dim_count: int = 2) -> np.ndarray:
     """
     Translate a variable from its native grid to a requested grid dimensions.
 
     A variable may contain more dimensions that latitude or longitude, and
     may also contain level or time dimensions, for instance. If any such
-    extra dimensions are present, specify how many there are in the dim_count
-    parameter to identify at what level the latitude/longitude data is found.
+    extra dimensions are present, specify how many total dimensions there are
+    in the dim_count parameter to identify at what level the latitude/longitude
+    data is found.
+
+    Precondition:
+        dim_count >= 2
 
     :param dataset:
         The NetCDF dataset object from which the data originates
@@ -98,16 +102,16 @@ def _regrid_netcdf_variable(dataset: 'custom_readers.NetCDFReader',
         A tuple containing the number of latitude and longitude grades there
         are in the new grid
     :param dim_count:
-        The number of dimensions other than latitude and longitude
+        The number of dimensions in the data
     :return:
         The data, translated onto the specified grid
     """
     if grid is None:
         return data_var
-    if dim_count < 0:
+    if dim_count < 2:
         raise ValueError("Grid inputs must have at least 2 dimensions")
     else:
-        if dim_count == 0:
+        if dim_count == 2:
             return _adjust_latlong_grid(dataset, data_var, grid)
         else:
             new_grid = []
@@ -118,7 +122,7 @@ def _regrid_netcdf_variable(dataset: 'custom_readers.NetCDFReader',
                 new_grid.append(_regrid_netcdf_variable(dataset, data_var[i],
                                                         grid, dim_count - 1))
 
-            return new_grid
+            return np.array(new_grid)
 
 
 def arrhenius_temperature_data(grid: Tuple[int, int] = (10, 20),
@@ -166,7 +170,7 @@ def arrhenius_temperature_data(grid: Tuple[int, int] = (10, 20),
 
     data = dataset.collect_untimed_data("temperature")
     # Regrid the humidity variable to the specified grid, if necessary.
-    regridded_data = _regrid_netcdf_variable(dataset, data[:], grid, 1)
+    regridded_data = _regrid_netcdf_variable(dataset, data[:], grid, 3)
 
     return regridded_data
 
@@ -214,8 +218,8 @@ def berkeley_temperature_data(grid: tuple = (180, 360),
     clmt = dataset.collect_untimed_data('climatology')
 
     # Translate data from the default, 1 by 1 grid to any specified grid.
-    regridded_data = _regrid_netcdf_variable(dataset, data[:], grid, 1)
-    regridded_clmt = _regrid_netcdf_variable(dataset, clmt[:], grid, 1)
+    regridded_data = _regrid_netcdf_variable(dataset, data[:], grid, 3)
+    regridded_clmt = _regrid_netcdf_variable(dataset, clmt[:], grid, 3)
 
     for i in range(0, 12):
         # Store arrays locally to avoid repeatedly indexing dataset.
@@ -277,7 +281,7 @@ def arrhenius_humidity_data(grid: Tuple[int, int] = (10, 20),
 
     dataset = custom_readers.ArrheniusDataReader()
     data = dataset.collect_untimed_data("rel_humidity")
-    regridded_data = _regrid_netcdf_variable(dataset, data[:], grid, 1)
+    regridded_data = _regrid_netcdf_variable(dataset, data[:], grid, 3)
 
     return regridded_data
 
@@ -320,10 +324,9 @@ def ncar_humidity_data(grid: tuple = (180, 360),
 
     dataset = custom_readers.NCEPHumidityReader()
 
-    humidity = dataset.read_newest('shum')
+    humidity = dataset.read_newest('shum')[:]
     # Regrid the humidity variable to the specified grid, if necessary.
-    regridded_humidity = _regrid_netcdf_variable(dataset, humidity[:, :, :],
-                                                 grid, 1)
+    regridded_humidity = _regrid_netcdf_variable(dataset, humidity, grid, 3)
 
     return regridded_humidity
 
@@ -363,10 +366,9 @@ def landmask_albedo_data(temp_data: np.ndarray,
 
     # Berkeley Earth dataset includes variables indicating which 1-degree
     # latitude-longitude cells are primarily land.
-    land_coords = dataset.collect_untimed_data('land_mask')
+    land_coords = dataset.collect_untimed_data('land_mask')[:]
     # Regrid the land/ocean variable to the specified grid, if necessary.
-    regridded_land_coords = _regrid_netcdf_variable(dataset, land_coords[:],
-                                                    grid, 0)
+    regridded_land_coords = _regrid_netcdf_variable(dataset, land_coords, grid)
 
     # Create an array of the same size as the grid, in which to store
     # grid cell albedo values.
