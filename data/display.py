@@ -1,9 +1,10 @@
-import os
-from typing import List, Tuple, Union
+from os import path
+from typing import List, Tuple
 
-from resources import OUTPUT_REL_PATH
-from writer import NetCDFWriter
-from grid import convert_grid_format
+from data.resources import OUTPUT_REL_PATH
+from data.writer import NetCDFWriter
+from data.grid import LatLongGrid, convert_grid_format,\
+    extract_multidimensional_grid_variable
 
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap
@@ -11,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-OUTPUT_FULL_PATH = os.path.join(Path('.').absolute(), OUTPUT_REL_PATH)
+OUTPUT_FULL_PATH = path.join(Path('.').absolute(), OUTPUT_REL_PATH)
 
 
 class ModelImageRenderer:
@@ -21,7 +22,7 @@ class ModelImageRenderer:
     on a world map projection.
     """
     def __init__(self: 'ModelImageRenderer',
-                 data: List[Union[List, float]],
+                 data: 'LatLongGrid',
                  grid: Tuple[int, int] = (1, 1)) -> None:
         """
         Instantiate a new ModelImageReader.
@@ -76,7 +77,7 @@ class ModelImageRenderer:
         x, y = map(lons, lats)
 
         # Overlap the gridded data on top of the map.
-        img = map.pcolormesh(x, y, self._data)
+        img = map.pcolormesh(x, y, self._data.extract_datapoint('temperature'))
         map.colorbar(img)
         # Save the image and clear added components from memory
         plt.savefig(out_path)
@@ -99,20 +100,16 @@ class ModelOutput:
 
     def __init__(self: 'ModelOutput',
                  title: str,
-                 data: List[Union[List, float]],
-                 data_grid: Tuple[int, int]) -> None:
+                 data: List['LatLongGrid'],
+                 data_grid: Tuple[int, int] = (10, 20)) -> None:
         """
         Instantiate a new ModelOutput object.
 
-        Model data is provided through the data parameter, which must be an
-        array or array-like structure (such as a nested list) of the right
-        dimensions. The first dimension is time, and can contain any number
-        of elements; the second and third dimensions are latitude and
-        longitude, respectively. The number of elements in these dimensions
-        must be able to be multiplied by the corresponding grid cell width
-        in the grid to gve 180 degrees latitude and 360 degrees longitude.
+        Model data is provided through the data parameter, through a list of
+        grid objects. Each grid in the list represents a segment of time, such
+        as a month or a season.
 
-        The grid must be a tuple of two numbers which represent the width of
+        data_grid must be a tuple of two numbers which represent the width of
         each grid cell in degrees latitude and longitude, respectively.
 
         Finally, the title parameter gives the name of the directory that
@@ -149,27 +146,31 @@ class ModelOutput:
         file is produced, in which all time segments are present.
         """
         # Create a directory for this model output if none exists already.
-        out_dir_path = os.path.join(OUTPUT_FULL_PATH, self._title)
+        out_dir_path = path.join(OUTPUT_FULL_PATH, self._title)
         out_dir = Path(out_dir_path)
         out_dir.mkdir(exist_ok=True)
 
-        out_file_path = os.path.join(out_dir_path, self._title + ".nc")
+        out_file_path = path.join(out_dir_path, self._title + ".nc")
         file_ext = '.png'
 
         # Write the data out to a NetCDF file in the output directory.
         grid_by_count = convert_grid_format(self._grid)
+        all_dims = ['time', 'latitude', 'longitude']
 
-        nc_writer = NetCDFWriter(data=self._data)\
-            .add_dimension(('time', np.int32, len(self._data))) \
-            .add_dimension(('latitude', np.int32, grid_by_count[0])) \
-            .add_dimension(('longitude', np.int32, grid_by_count[1])) \
-            .variable_meta(('temp', np.float32))
+        nc_writer = NetCDFWriter()\
+            .dimension('time', np.int32, len(self._data))\
+            .dimension('latitude', np.int32, grid_by_count[0])\
+            .dimension('longitude', np.int32, grid_by_count[1])\
+            .variable('temp', np.float32, all_dims)\
+            .data('temp', extract_multidimensional_grid_variable(self._data,
+                                                                 'temperature',
+                                                                 3))
         nc_writer.write(out_file_path)
 
         # Write an image file for each time segment.
         for i in range(len(self._data)):
             img_name = self._title + '_' + str(i + 1) + file_ext
-            img_path = os.path.join(out_dir_path, img_name)
+            img_path = path.join(out_dir_path, img_name)
 
             # Produce and save the image.
             g = ModelImageRenderer(self._data[i], grid=self._grid)
