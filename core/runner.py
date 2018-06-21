@@ -42,24 +42,24 @@ def calculate_cell_temperature_change(init_CO2: float, new_CO2: float,
     init_temperature = grid_cell.get_temperature()
     relative_humidity = grid_cell.get_relative_humidity()
     albedo = grid_cell.get_albedo()
-    init_absorb = cell_operations.calculate_absorption_coefficient(init_CO2,
-                                                                   init_temperature,
-                                                                   relative_humidity)
-    K = calibrate_constant(init_temperature, albedo, init_absorb)
+    init_transparency = cell_operations.calculate_transparency(init_CO2,
+                                                               init_temperature,
+                                                               relative_humidity)
+    K = calibrate_constant(init_temperature, albedo, init_transparency)
 
-    mid_absorb = cell_operations.calculate_absorption_coefficient(new_CO2,
-                                                                  init_temperature,
-                                                                  relative_humidity)
-    mid_temperature = get_new_temperature(albedo, mid_absorb, K)
-    final_absorb = cell_operations.calculate_absorption_coefficient(new_CO2,
-                                                                    mid_temperature,
-                                                                    relative_humidity)
-    final_temperature_change = get_new_temperature(albedo, final_absorb, K) \
+    mid_transparency = cell_operations.calculate_transparency(new_CO2,
+                                                              init_temperature,
+                                                              relative_humidity)
+    mid_temperature = get_new_temperature(albedo, mid_transparency, K)
+    final_transparency = cell_operations.calculate_transparency(new_CO2,
+                                                                mid_temperature,
+                                                                relative_humidity)
+    final_temperature_change = get_new_temperature(albedo, final_transparency, K) \
                                - init_temperature
     return final_temperature_change
 
 
-def calibrate_constant(temperature, albedo, absorption) -> float:
+def calibrate_constant(temperature, albedo, transparency) -> float:
     """
     Calculate the constant K used in Arrhenius' temperature change equation
     using the initial values of temperature and absorption in a grid cell.
@@ -68,30 +68,30 @@ def calibrate_constant(temperature, albedo, absorption) -> float:
         The temperature of the grid cell
     :param albedo:
         The albedo of the grid cell
-    :param absorption:
-        The absorption coefficient of the grid cell
+    :param transparency:
+        The transparency of the grid cell
 
     :return:
         The calculated constant K
     """
-    return pow(temperature, 4) * (1 + (1 - albedo) * (1 - absorption))
+    return pow(temperature, 4) * (1 + (1 - albedo) * transparency)
 
 
-def get_new_temperature(albedo: float, new_absorption: float, K: float) -> float:
+def get_new_temperature(albedo: float, new_transparency: float, K: float) -> float:
     """
     Calculate the new temperature after a change in absorption coefficient
 
     :param albedo:
         The albedo of the grid cell
-    :param new_absorption:
-        The new value of the absorption coefficient for the grid cell
+    :param new_transparency:
+        The new value of the transparency for the grid cell
     :param K:
         A constant used in Srrhenius' temperature change equation
 
     :return:
         The change in temperature for a grid cell with the given change in B
     """
-    denominator = 1 + (1 - albedo) * (1 - new_absorption)
+    denominator = 1 + (1 - albedo) * new_transparency
     return pow((K / denominator), 1 / 4)
 
 
