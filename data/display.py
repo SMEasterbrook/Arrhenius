@@ -6,6 +6,9 @@ from data.writer import NetCDFWriter
 from data.grid import LatLongGrid, convert_grid_format,\
     extract_multidimensional_grid_variable
 
+import data.provider as pr
+from data.collector import ClimateDataCollector
+
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
@@ -49,36 +52,59 @@ class ModelImageRenderer:
         self._grid = grid
 
         # Some parameters for the visualization are also left as attributes.
-        self._linewidth = 0.5
+        self._continent_linewidth = 0.5
+        self._lat_long_linewidth = 0.1
 
     def save_image(self: 'ModelImageRenderer',
-                   out_path: str) -> None:
+                   out_path: str,
+                   min_max_grades: Tuple[int, int] = (-60, 60)) -> None:
         """
         Produces a .PNG formatted image file containing the gridded data
         overlaid on a map projection.
 
-        The map is displayed in equirectangular projection, without any lines
-        of latitude or longitude shown. Instead, each grid cell is filled in
-        on the inside with a colour unique to the value within that cell.
+        The map is displayed in equirectangular projection, labelled with
+        lines of latitude and longitude at the intersection between
+        neighboring grid cells. The grid cells are filled in with a colour
+        denoting the magnitude of the temperature at that cell.
+
+        The optional min_max_grades parameter specifies the lower bound and
+        the upper bound of the range of values for which different colours
+        are assigned. Any grid cell with a temperature value below the first
+        element of min_max_grades will be assigned the same colour. The same
+        applies to any cell with a temperature greater than min_max_grades[1].
+        The default boundaries are -60 and 40.
 
         The image is saved at the specified absolute or relative filepath.
 
         :param out_path:
             The location where the image file is created
+        :param min_max_grades:
+            A tuple containing the boundary values for the colorbar shown in
+            the image file
         """
+        if len(min_max_grades) != 2:
+            raise ValueError("Color grade boundaries must be given in a tuple"
+                             "of length 2 (is length {})"
+                             .format(len(min_max_grades)))
         # Create an empty world map in equirectangular projection.
         map = Basemap(llcrnrlat=-90, llcrnrlon=-180,
                       urcrnrlat=90, urcrnrlon=180)
-        map.drawcoastlines(linewidth=self._linewidth)
+        map.drawcoastlines(linewidth=self._continent_linewidth)
 
         # Construct a grid from the horizontal and vertical sizes of the cells.
         lats = list(range(-90, 91, self._grid[0]))
         lons = list(range(-180, 181, self._grid[1]))
+
+        map.drawparallels(lats, linewidth=self._lat_long_linewidth)
+        map.drawmeridians(lons, linewidth=self._lat_long_linewidth)
         x, y = map(lons, lats)
 
-        # Overlap the gridded data on top of the map.
-        img = map.pcolormesh(x, y, self._data.extract_datapoint('temperature'))
+        # Overlap the gridded data on top of the map, and display a colour
+        # legend with the appropriate boundaries.
+        img = map.pcolormesh(x, y, self._data.extract_datapoint('temperature'),
+                             cmap=plt.cm.get_cmap("jet"))
         map.colorbar(img)
+        plt.clim(min_max_grades[0], min_max_grades[1])
         # Save the image and clear added components from memory
         plt.savefig(out_path)
         plt.close()
@@ -157,6 +183,7 @@ class ModelOutput:
         grid_by_count = convert_grid_format(self._grid)
         all_dims = ['time', 'latitude', 'longitude']
 
+        print("Writing NetCDF dataset...")
         nc_writer = NetCDFWriter()\
             .dimension('time', np.int32, len(self._data))\
             .dimension('latitude', np.int32, grid_by_count[0])\
@@ -169,9 +196,31 @@ class ModelOutput:
 
         # Write an image file for each time segment.
         for i in range(len(self._data)):
+            print("Preparing to write image file {}...".format(i))
             img_name = self._title + '_' + str(i + 1) + file_ext
             img_path = path.join(out_dir_path, img_name)
 
             # Produce and save the image.
+            print("\tSaving image...")
             g = ModelImageRenderer(self._data[i], grid=self._grid)
             g.save_image(img_path)
+
+
+if __name__ == '__main__':
+    grid = (10, 20)
+    b = ClimateDataCollector(grid) \
+        .use_temperature_source(pr.berkeley_temperature_data) \
+        .use_humidity_source(pr.ncar_humidity_data) \
+        .use_albedo_source(pr.landmask_albedo_data) \
+        .get_gridded_data()
+
+    print(len(b))
+
+    # for outer_lst in b:
+    #     for inner_lst in outer_lst:
+    #         for gr_cell in inner_lst:
+    #             print(gr_cell)
+
+    o = ModelOutput("berkeley2017_10x20", b, grid)
+    o.write_output()
+
