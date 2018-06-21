@@ -6,9 +6,6 @@ from data.writer import NetCDFWriter
 from data.grid import LatLongGrid, convert_grid_format,\
     extract_multidimensional_grid_variable
 
-import data.provider as pr
-from data.collector import ClimateDataCollector
-
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
@@ -185,10 +182,18 @@ class ModelOutput:
 
         print("Writing NetCDF dataset...")
         nc_writer = NetCDFWriter()\
+            .global_attribute("description", "Output for an Arrhenius model"
+                                             "run" + self._title + ".")\
             .dimension('time', np.int32, len(self._data))\
             .dimension('latitude', np.int32, grid_by_count[0])\
             .dimension('longitude', np.int32, grid_by_count[1])\
             .variable('temp', np.float32, all_dims)\
+            .variable_attribute("temperature", "description",
+                                "Average surface temperature across the {}x{}"
+                                "degree latitude/longitude cell centered"
+                                "at these latitude and longitude coordinates"
+                                .format(grid[0], grid[1]))\
+            .variable_attribute("temperature", "units", "Degrees Celsius")\
             .data('temp', extract_multidimensional_grid_variable(self._data,
                                                                  'temperature',
                                                                  3))
@@ -204,23 +209,3 @@ class ModelOutput:
             print("\tSaving image...")
             g = ModelImageRenderer(self._data[i], grid=self._grid)
             g.save_image(img_path)
-
-
-if __name__ == '__main__':
-    grid = (10, 20)
-    b = ClimateDataCollector(grid) \
-        .use_temperature_source(pr.berkeley_temperature_data) \
-        .use_humidity_source(pr.ncar_humidity_data) \
-        .use_albedo_source(pr.landmask_albedo_data) \
-        .get_gridded_data()
-
-    print(len(b))
-
-    # for outer_lst in b:
-    #     for inner_lst in outer_lst:
-    #         for gr_cell in inner_lst:
-    #             print(gr_cell)
-
-    o = ModelOutput("berkeley2017_10x20", b, grid)
-    o.write_output()
-
