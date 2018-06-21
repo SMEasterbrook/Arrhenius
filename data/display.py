@@ -98,7 +98,7 @@ class ModelImageRenderer:
 
         # Overlap the gridded data on top of the map, and display a colour
         # legend with the appropriate boundaries.
-        img = map.pcolormesh(x, y, self._data.extract_datapoint('temperature'),
+        img = map.pcolormesh(x, y, self._data.extract_datapoint('delta_t'),
                              cmap=plt.cm.get_cmap("jet"))
         map.colorbar(img)
         plt.clim(min_max_grades[0], min_max_grades[1])
@@ -188,12 +188,12 @@ class ModelOutput:
             .dimension('latitude', np.int32, grid_by_count[0])\
             .dimension('longitude', np.int32, grid_by_count[1])\
             .variable('temp', np.float32, all_dims)\
-            .variable_attribute("temperature", "description",
+            .variable_attribute("temp", "description",
                                 "Average surface temperature across the {}x{}"
                                 "degree latitude/longitude cell centered"
                                 "at these latitude and longitude coordinates"
                                 .format(self._grid[0], self._grid[1]))\
-            .variable_attribute("temperature", "units", "Degrees Celsius")\
+            .variable_attribute("temp", "units", "Degrees Celsius")\
             .data('temp', extract_multidimensional_grid_variable(self._data,
                                                                  'temperature',
                                                                  3))

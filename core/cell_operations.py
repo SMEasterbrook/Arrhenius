@@ -82,7 +82,7 @@ def calculate_transparency(CO2: float, temperature: float, relative_humidity: fl
         if abs(p * water_vapor - key[1]) < abs(p * water_vapor - closest_water_vapor):
             closest_water_vapor = key[1]
 
-    transparency = TRANSPARENCY.get((closest_CO2, closest_water_vapor))
+    transparency = TRANSPARENCY.get((closest_CO2, closest_water_vapor)) / 100
     return transparency
 
 
@@ -102,7 +102,7 @@ def calculate_water_vapor(temperature: float, relative_humidity: float):
     # use Antoine equation from 1888 to calculate saturation water vapor pressure
     # equation constants A, B, & C from:
     # https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=4&Type=ANTOINE&Plot=on#ANTOINE
-    temp_Kelvin = temperature + 273.15
+    temp_Kelvin = temperature
     pressure_saturation = 10 ** (CONST_A - (CONST_B/(temp_Kelvin + CONST_C)))
     #convert pressure from bar to Pascals
     pressure_saturation = pressure_saturation *100000
