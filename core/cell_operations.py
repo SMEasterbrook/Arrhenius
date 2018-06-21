@@ -55,9 +55,9 @@ MEAN_PATH = {
     (3.5, .3): 1.48, (3.5, .5): 1.48, (3.5, 1.0): 1.45, (3.5, 2.0): 1.42,
 }
 
-def calculate_absorption_coefficient(CO2: float, temperature: float, relative_humidity: float):
+def calculate_transparency(CO2: float, temperature: float, relative_humidity: float):
     """
-    Calculate the absorption coefficient for a grid cell with the given data.
+    Calculate the transparency for a grid cell with the given data.
 
     :param CO2:
         The amount of CO2 in the atmosphere
@@ -83,9 +83,7 @@ def calculate_absorption_coefficient(CO2: float, temperature: float, relative_hu
             closest_water_vapor = key[1]
 
     transparency = TRANSPARENCY.get((closest_CO2, closest_water_vapor))
-    absorption_coefficient = (100 - transparency) / 100.0
-    print((closest_CO2, closest_water_vapor))
-    return absorption_coefficient
+    return transparency
 
 
 def calculate_water_vapor(temperature: float, relative_humidity: float):
