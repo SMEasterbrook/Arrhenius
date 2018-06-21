@@ -1,5 +1,6 @@
 from netCDF4 import Dataset
 from datetime import datetime
+from numpy import ndarray
 
 
 class NetCDFReader:
@@ -7,7 +8,9 @@ class NetCDFReader:
     A dataset reader for NetCDF files. Provides read-only access to existing
     NetCDF data.
     """
-    def __init__(self, file_name, format="NETCDF4"):
+    def __init__(self: 'NetCDFReader',
+                 file_name: str,
+                 format: str = "NETCDF4") -> None:
         """
         Create a TimeboundNetCDFReader to access data in a NetCDF file.
 
@@ -23,17 +26,18 @@ class NetCDFReader:
         self._file_format = format
         self._data = None
 
-    def _open_dataset(self):
+    def _open_dataset(self: 'NetCDFReader') -> None:
         """ Ensure the data reader's NetCDF dataset has been opened. """
         if self._data is None:
             self._data = Dataset(self._file, self._file_mode,
                                  self._file_format)
 
-    def _dataset(self):
+    def _dataset(self: 'NetCDFReader') -> Dataset:
         """ Returns the reader's underlying Dataset object. """
         return self._data
 
-    def collect_untimed_data(self, datapoint):
+    def collect_untimed_data(self: 'NetCDFReader',
+                             datapoint: str) -> ndarray:
         """
         Returns the data under the specified header, which is not associated
         with a time field.
@@ -52,7 +56,7 @@ class NetCDFReader:
         var = data.variables[datapoint]
         return var[:]
 
-    def latitude(self):
+    def latitude(self: 'NetCDFReader') -> ndarray:
         """
         Returns the NetCDF data file's latitude variable values.
 
@@ -60,7 +64,7 @@ class NetCDFReader:
         """
         return self.collect_untimed_data("latitude")
 
-    def longitude(self):
+    def longitude(self: 'NetCDFReader') -> ndarray:
         """
         Returns the NetCDF data file's longitude variable values.
 
@@ -77,7 +81,8 @@ class TimeboundNetCDFReader(NetCDFReader):
     data from only certain years.
     """
 
-    def read_newest(self, datapoint):
+    def read_newest(self: 'TimeboundNetCDFReader',
+                    datapoint: str) -> ndarray:
         """
         Retrieve the data under the variable specified by var, limited to the
         current year. Only applies to datasets that have a time value for
@@ -94,7 +99,9 @@ class TimeboundNetCDFReader(NetCDFReader):
 
         return data_now
 
-    def collect_timed_data(self, datapoint, year):
+    def collect_timed_data(self: 'TimeboundNetCDFReader',
+                           datapoint: str,
+                           year: int) -> ndarray:
         """
         Returns the data under the specified header, taken from the selected
         year.

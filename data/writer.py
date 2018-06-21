@@ -145,8 +145,8 @@ class NetCDFWriter:
         :param var_type:
             The type of the new variable
         :param var_dims:
-            The list of dimensions associated with the new variable, in order of
-            appearance in the variable's data array
+            The list of dimensions associated with the new variable, in
+            order of appearance in the variable's data array
         :return:
             This NetCDFWriter instance
         """
@@ -324,7 +324,8 @@ class NetCDFWriter:
             var_dims = tuple(self._variables[var_name][VAR_DIMS_KEY])
             var_attrs = self._variables[var_name][VAR_ATTR_KEY]
 
-            # Load the main variable data into the dataset, using all dimensions.
+            # Load the main variable data into the dataset, using
+            # all dimensions.
             var = output_dataset.createVariable(var_name, var_type, var_dims)
 
             # Load variable attributes.

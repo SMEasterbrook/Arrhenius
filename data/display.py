@@ -3,7 +3,7 @@ from typing import List, Tuple
 
 from data.resources import OUTPUT_REL_PATH
 from data.writer import NetCDFWriter
-from data.grid import LatLongGrid, convert_grid_format,\
+from data.grid import convert_grid_format,\
     extract_multidimensional_grid_variable
 
 from pathlib import Path

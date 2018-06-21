@@ -60,20 +60,21 @@ def extract_multidimensional_grid_variable(grids: Union[list, 'LatLongGrid'],
                                            datapoint: str,
                                            dim_count: int = 3) -> np.ndarray:
     """
-    Extract a datapoint from a multidimensional nested list of grids, returning
-    an array of that datapoint. The array will have the same dimensions as the
-    original list, extended with the dimensions of the grids contained.
+    Extract a datapoint from a multidimensional nested list of grids,
+    returning an array of that datapoint. The array will have the same
+    dimensions as the original list, extended with the dimensions of the
+    grids contained.
 
     For example, calling the function with a list of four 10x20 grids, and
     requesting the variable 'temperature', will return a 4x10x20 array of
     temperature values of cells in the four grids.
 
-    An optional parameter dim_count allows specification of the number of total
-    dimensions to the data. A single grid instance is considered to have two
-    dimensions, latitude and longitude. A list of grids has three dimensions,
-    a list of list of grids has four, etc. Be careful to match up the dim_count
-    parameter's value with the actual number of dimensions of the data, or else
-    errors will be raised.
+    An optional parameter dim_count allows specification of the number of
+    total dimensions to the data. A single grid instance is considered to have
+    two dimensions, latitude and longitude. A list of grids has three
+    dimensions, a list of list of grids has four, etc. Be careful to match up
+    the dim_count parameter's value with the actual number of dimensions of the
+    data, or else errors will be raised.
 
     Precondition:
         dim_count >= 2
@@ -139,8 +140,8 @@ class GridCell:
             raise ValueError("Value for temperature must be greater than -273"
                              "(is {})".format(temp))
         elif r_hum < 0 or r_hum > 100:
-            raise ValueError("Value for relative humidity must fall in [0, 100]"
-                             "(is {})".format(r_hum))
+            raise ValueError("Value for relative humidity must fall in"
+                             "[0, 100] (is {})".format(r_hum))
         elif albedo < 0 or albedo > 1:
             raise ValueError("Value for albedo must fall in [0, 1] (is {})"
                              .format(albedo))
@@ -151,7 +152,7 @@ class GridCell:
 
         self._delta_temp = 0
 
-    def __str__(self: 'GridCell'):
+    def __str__(self: 'GridCell') -> str:
         """
         Returns a str representation of this grid cell and data it contains.
 
@@ -219,8 +220,8 @@ class GridCell:
             The new value for relative humidity in this cell
         """
         if new_r_hum < 0 or new_r_hum > 100:
-            raise ValueError("Value for relative humidity must fall in [0, 100]"
-                             "(is {})".format(new_r_hum))
+            raise ValueError("Value for relative humidity must fall in"
+                             "[0, 100] (is {})".format(new_r_hum))
 
         self._rel_humidity = new_r_hum
 
@@ -309,7 +310,7 @@ class LatLongGrid:
                 yield row[j]
 
     def grid_dimensions(self: 'LatLongGrid',
-                        grid_form: str = "width") -> Union[Tuple[int, int], None]:
+                        grid_form: str = "width") -> Tuple[int, int]:
         """
         Returns a two-element tuple containing the dimensions of the grid.
         The first element represent latitude, and the second represents
@@ -322,13 +323,13 @@ class LatLongGrid:
         is how many cells it takes to circle the globe in the appropriate
         dimension.
 
-        Returns None if no data has been provided from which to form a grid.
+        Returns (0, 0) if no data has been provided from which to form a grid.
 
         :return:
             A tuple containing the dimensions of this grid
         """
         if self._data is None:
-            return None
+            return 0, 0
         else:
             grid_by_count = (len(self._data), len(self._data[0]))
 
@@ -422,7 +423,10 @@ class LatLongGrid:
             is in ['temperature', 'humidity', 'albedo'])
 
         :param datapoint:
+            The name of the GridCell variable to be returned
         :return:
+            A array of equivalent dimensions to the grid, containing only
+            values for the requested variable
         """
         converted_data = []
 

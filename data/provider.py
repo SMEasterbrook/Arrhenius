@@ -125,7 +125,7 @@ def _regrid_netcdf_variable(dataset: 'custom_readers.NetCDFReader',
             return np.array(new_grid)
 
 
-def _avg(data_var: np.ndarray):
+def _avg(data_var: np.ndarray) -> float:
     """
     Returns the average of the numeric element of the data array.
 
