@@ -146,7 +146,7 @@ class GridCell:
             raise ValueError("Value for albedo must fall in [0, 1] (is {})"
                              .format(albedo))
 
-        self._temperature = temp
+        self._temperature = temp + 273.15
         self._rel_humidity = r_hum
         self._albedo = albedo
 
@@ -180,9 +180,9 @@ class GridCell:
             -273.0 <= new_temp
 
         :param new_temp:
-            The new value, in degrees Celsius, for temperature in this cell
+            The new value, in Kelvin, for temperature in this cell
         """
-        if new_temp < -273:
+        if new_temp < 0:
             raise ValueError("Value for temperature must be greater than -273"
                              "(is {})".format(new_temp))
 
@@ -245,7 +245,8 @@ class GridCell:
 VAR_NAME_TO_EXTRACTOR = {
     'temperature': GridCell.get_temperature,
     'humidity': GridCell.get_relative_humidity,
-    'albedo': GridCell.get_albedo
+    'albedo': GridCell.get_albedo,
+    'delta_t': GridCell.get_temperature_change
 }
 
 
