@@ -1,5 +1,7 @@
 from typing import List, Tuple, Callable, Union
-from grid import GridCell, convert_grid_format
+from data.grid import LatLongGrid, GridCell, convert_grid_format
+
+from data.provider import REQUIRE_TEMP_DATA_INPUT
 
 
 # Type aliases
@@ -19,7 +21,18 @@ class ClimateDataCollector:
     """
 
     def __init__(self: CDC,
-                 grid: Tuple[int, int] = None) -> None:
+                 grid: Tuple[int, int] = (10, 20)) -> None:
+        """
+        Instantiate a new ClimateDataCollector instance.
+
+        Takes an optional parameter grid, which is a tuple of two integers.
+        Passing this grid parameter is equivalent to calling the constructor
+        with no arguments, and then calling load_grid with the same grid.
+
+        :param grid:
+            An optional tuple representing the grid on which data should be
+            placed
+        """
         # Provider functions that produce various types of data
         self._temp_source = None
         self._humidity_source = None
@@ -30,23 +43,28 @@ class ClimateDataCollector:
         self._grid_data = None
         self._absorbance_data = None
 
-        if grid is None:
-            # Default grid dimensions give 1 by 1 degree squares.
-            self._grid = (180, 360)
-        else:
-            self.load_grid(grid)
+        self._grid = None
+        self.load_grid(grid)
 
     def load_grid(self: CDC,
-                  grid: Tuple[int, int]) -> CDC:
+                  grid: Tuple[int, int],
+                  grid_form: str = "width") -> CDC:
         """
         Select dimensions for a new latitude and longitude grid, to which
         all gridded data is fitted. Returns the collector object, so that
         repeated builder method calls can be continued.
 
-        The grid is reported as a tuple of two elements. The first element
-        represents the latitudinal width of a single grid cell, in degrees.
-        The second element represents the longitudinal width of a grid cell,
-        also in degrees.
+        The grid is reported as a tuple of two elements. How the elements
+        are interpreted depends on the value of the optional parameter.
+        By default, and if the optional parameter is given the value 'width',
+        the first element represents the latitudinal width of a single grid
+        cell in degrees. The second element represents the longitudinal width
+        of a grid cell, also in degrees.
+
+        If the optional parameter is given the value 'count', then the first
+        element in the tuple is interpreted as the number of grid cells
+        required to circle the Earth horizontally, and the second element as
+        the number of grid cells required to circle the Earth vertically.
 
         For example, passing a tuple of (10, 10) would create a grid of
         10-by-10-degree squares, with 18 divisions of latitude and 36
@@ -56,8 +74,15 @@ class ClimateDataCollector:
         latitudinal width of 0.5 degrees) but the number of grid cells
         produced is rounded to an integer.
 
+        Preconditions:
+            len(grid) == 2
+            grid_form == 'width' or grid_form == 'count'
+
         :param grid:
             A tuple denoting the size of a grid cell
+        :param grid_form:
+            The format in which to interpret the grid, either
+            'width' or 'count'.
         """
         if grid is None:
             raise ValueError("grid must not be None")
@@ -74,7 +99,14 @@ class ClimateDataCollector:
             raise ValueError("grid elements must be numeric types"
                              "(element 1 is type {})".format(type(grid[1])))
 
-        self._grid = convert_grid_format(grid)
+        if grid_form == "width":
+            self._grid = convert_grid_format(grid)
+        elif grid_form == "count":
+            self._grid = grid
+        else:
+            raise ValueError("grid_form must be either 'width' or 'count',"
+                             "is {}".format(grid_form))
+        self._grid_data = None
         return self
 
     def use_temperature_source(self: CDC,
@@ -152,56 +184,78 @@ class ClimateDataCollector:
         self._absorbance_data = None
         return self
 
-    def get_gridded_data(self: CDC) -> List[List['GridCell']]:
+    def get_gridded_data(self: CDC) -> List['LatLongGrid']:
         """
-        Combines and returns all 2-dimensional gridded surface data, including
-        surface temperature and surface albedo.
+        Combines and returns all gridded surface data, including surface
+        temperature, relative humidity, and surface albedo. The data is
+        returned having been converted to the grid loaded most recently.
 
-        Data is returned in a 2-dimensional array of dictionaries, where each
-        dictionary acts like a JSON object. The temperature field in the dict
-        refers to an array of 12 monthly temperature values, with index 0
-        being January and index 11 being December. The albedo field refers to
-        the grid cell's surface albedo.
+        It is assumed that temperature, relative humidity, and albedo are time
+        dependent. That is, the data arrays for those variables have three
+        dimensions, the first of which is time. It is expected that these two
+        data have the same gradations of their time dimensions, e.g.
+        temperature and humidity are both measured in 3-month segments.
 
         Raises an exception if not all of the required data providers have
         been loaded through builder methods.
 
         :return:
-            An array of 1-degree gridded surface data
+            An array of gridded surface data
         """
         if self._grid_data is not None:
+            # A grid was constructed with the same grid and data sources,
+            # and nothing has changed since.
             return self._grid_data
         elif self._temp_source is None:
             raise PermissionError("No temperature provider function selected")
         elif self._albedo_source is None:
             raise PermissionError("No albedo provider function selected")
 
-        temp_data = self._temp_source(self._grid)
-        r_hum_data = self._humidity_source(self._grid)
-        albedo_data = self._albedo_source(self._grid)
+        temp_data = self._temp_source(self._grid, "count")
+        r_hum_data = self._humidity_source(self._grid, "count")
 
+        if len(temp_data) != len(r_hum_data):
+            raise ValueError("Temperature and humidity must have the same"
+                             "time dimensions")
+
+        if self._albedo_source in REQUIRE_TEMP_DATA_INPUT:
+            albedo_data = self._albedo_source(temp_data, self._grid, "count")
+        else:
+            albedo_data = self._albedo_source(self._grid, "count")
         self._grid_data = []
 
-        # Start building a 2-D nested list structure for output, row by row.
-        for i in range(self._grid[0]):
-            # Holding row lists in memory prevents excess list lookups.
-            temp_row = temp_data[0][i]
-            r_hum_row = r_hum_data[0][i]
-            albedo_row = albedo_data[i]
-            # Start creating a new list column for entry into the output list.
-            longitude_row = []
+        # Start building a 2-D nested list structure for output, row by roW.
+        for i in range(len(temp_data)):
+            temp_time_segment = temp_data[i]
+            r_hum_time_segment = r_hum_data[i]
+            albedo_time_segment = albedo_data[i]
 
-            for j in range(self._grid[1]):
-                temp = temp_row[j]
-                r_hum = r_hum_row[j]
-                albedo = albedo_row[j]
+            time_segment_row = []
+            for j in range(self._grid[0]):
+                # Holding row lists in memory prevents excess list lookups.
+                temp_row = temp_time_segment[j]
+                r_hum_row = r_hum_time_segment[j]
+                albedo_row = albedo_time_segment[j]
+                # Start creating a new list column for entry into the output
+                # list.
+                longitude_row = []
 
-                # Create JSON-like grid cell dictionary with gridded data.
-                grid_cell_obj = GridCell(temp, r_hum, albedo)
+                for k in range(self._grid[1]):
+                    # Package the data from this grid cell into a GridCell
+                    # object.
+                    temp = temp_row[k]
+                    r_hum = r_hum_row[k]
+                    albedo = albedo_row[k]
 
-                # Add new objects into the 2-D nested lists.
-                longitude_row.append(grid_cell_obj)
-            self._grid_data.append(longitude_row)
+                    grid_cell_obj = GridCell(temp, r_hum, albedo)
+
+                    # Add new GridCell objects into the 2-D nested lists.
+                    longitude_row.append(grid_cell_obj)
+                time_segment_row.append(longitude_row)
+
+            # Store data for this time gradation in a LatLongGrid object.
+            new_grid_data = LatLongGrid(time_segment_row)
+            self._grid_data.append(new_grid_data)
 
         return self._grid_data
 
