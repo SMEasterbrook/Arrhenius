@@ -125,6 +125,85 @@ def _regrid_netcdf_variable(dataset: 'custom_readers.NetCDFReader',
             return np.array(new_grid)
 
 
+def _avg(data_var: np.ndarray):
+    """
+    Returns the average of the numeric element of the data array.
+
+    :param data_var:
+        An array of numeric elements
+    :return:
+        The average of the elements
+    """
+    total = 0
+    for row in data_var:
+        total += sum(row)
+
+    return total / (len(data_var) * len(data_var[0]))
+
+
+def _naive_regrid(data_var: np.ndarray,
+                  grid: Tuple[int, int] = (10, 20),
+                  grid_form: str = "width") -> np.ndarray:
+    """
+    Regrid the given variable in the simplest way possible: by averaging the
+    values in the original grid that make up a cell in the new grid.
+
+    For this method to work, a single grid cell in the new grid must exactly
+    fit an integer number of cells from the original grid in both latitude
+    and longitude direction. That is, the width and height of a grid cell
+    in the new grid must be integer multiples of those in the original grid.
+
+    The optional grid parameter is a two-element tuple specifying the
+    dimensions of the grid to which the data will be converted. By default, the
+    elements in the tuple represent the width of a grid cell in degrees
+    latitude and degrees longitude, respectively.
+
+    If the second optional argument grid_form is provided with value 'count',
+    then the grid elements will be interpreted as the number of grid cells in
+    a latitudinal band and a longitudinal band around the Earth, respectively.
+
+    :param data_var:
+        A set of gridded data
+    :param grid:
+        The grid onto which to convert the data
+    :param grid_form:
+        How to interpret the grid; either 'width' or 'count'.
+    :return:
+        The data converted naively to the new grid
+    """
+
+    if grid_form == "width":
+        grid = convert_grid_format(grid)
+
+    if len(data_var) % grid[0] != 0:
+        raise ValueError("New grid latitude not an integer multiple of"
+                         "initial grid latitude")
+    elif len(data_var[0]) % grid[1] != 0:
+        raise ValueError("New grid longitude not an integer multiple of"
+                         "initial grid longitude")
+
+    lats_per_cell = int(len(data_var) / grid[0])
+    lons_per_cell = int(len(data_var[0]) / grid[1])
+
+    # Loop over groups of grid cells in the original grid that are to be
+    # combined into a single cell. Longitude order first, then latitude.
+    regridded_data = []
+    for i in range(0, 180, lats_per_cell):
+        orig_row = data_var[i:(i + lats_per_cell)]
+        regridded_row = []
+
+        for j in range(0, 360, lons_per_cell):
+            # Calculate the value for the new grid cell, which is the average
+            # of the smaller grid cells contained within it.
+            new_grid_cell = orig_row[:, j:(j + lons_per_cell)]
+            regridded_cell_val = _avg(new_grid_cell)
+            regridded_row.append(regridded_cell_val)
+
+        regridded_data.append(regridded_row)
+
+    return np.array(regridded_data)
+
+
 def arrhenius_temperature_data(grid: Tuple[int, int] = (10, 20),
                                grid_form: str = "width") -> np.ndarray:
     """
@@ -368,7 +447,7 @@ def landmask_albedo_data(temp_data: np.ndarray,
     # latitude-longitude cells are primarily land.
     land_coords = dataset.collect_untimed_data('land_mask')[:]
     # Regrid the land/ocean variable to the specified grid, if necessary.
-    regridded_land_coords = _regrid_netcdf_variable(dataset, land_coords, grid)
+    regridded_land_coords = _naive_regrid(land_coords, grid, "count")
 
     # Create an array of the same size as the grid, in which to store
     # grid cell albedo values.

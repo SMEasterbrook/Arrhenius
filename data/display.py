@@ -192,7 +192,7 @@ class ModelOutput:
                                 "Average surface temperature across the {}x{}"
                                 "degree latitude/longitude cell centered"
                                 "at these latitude and longitude coordinates"
-                                .format(grid[0], grid[1]))\
+                                .format(self._grid[0], self._grid[1]))\
             .variable_attribute("temperature", "units", "Degrees Celsius")\
             .data('temp', extract_multidimensional_grid_variable(self._data,
                                                                  'temperature',
