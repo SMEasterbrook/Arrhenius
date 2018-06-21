@@ -1,338 +1,202 @@
 from netCDF4 import Dataset
-from typing import List, Union
-from numpy import ndarray
-
-
-DIM_TYPE_KEY = 'type'
-DIM_SIZE_KEY = 'size'
-
-VAR_TYPE_KEY = 'type'
-VAR_DIMS_KEY = 'dims'
-VAR_ATTR_KEY = 'attrs'
+from resources import OUTPUT_PATH
 
 
 class NetCDFWriter:
     """
     A general NetCDF data writer, capable of writing various formats
-    of NetCDF files with multiple dimensions and variables.
+    of NetCDF files one variable at a time.
     """
 
-    def __init__(self: 'NetCDFWriter') -> None:
+    def __init__(self, dimensions=None, data=None):
         """
         Create a new NetCDFWriter instance.
+
+        :param dimensions:
+            A starting set of variable dimensions to use
+        :param data:
+            A starting dataset to write
         """
-        self._data = {}
-        self._dimensions = {}
-        self._variables = {}
+        self._dimensions = [] if dimensions is None else dimensions
+        self._data = data
+        self._var_meta = None
 
-        self._global_attrs = {}
-
-    def global_attribute(self: 'NetCDFWriter',
-                         attr_name: str,
-                         attr_val: str) -> 'NetCDFWriter':
+    def dimensions(self, dims):
         """
-        Register a global attribute to be added to the NetCDF output file.
-        For example, the attribute 'description' may refer to the string
-        'A dataset containing 10x20 degree gridded temperature and humidity
-        data used in Arrhenius' 1895 climate model.'
+        Load in a new set of variable dimensions for the next write.
 
-        Preconditions:
-            attr_name != ''
+        Variable dimensions must be in the form of a list of tuples, where
+        each tuple contains a str followed by a type followed by an int.
 
-        :param attr_name:
-            The name of the new global attribute
-        :param attr_val:
-            The value of the new global attribute
+        The first element of each tuple, the str, represents the name of
+        the dimension (e.g. latitude, time). The type element is the type
+        that will be stored (e.g. numpy.int32). The third int type is the
+        size of the dimension, or the expected number of elements. Leave as
+        None for an unlimited size dimension.
+
+        These variable dimensions will be used as dimensions in the NetCDF
+        file upon writing. They must occur in the same order as the
+        corresponding nested list within the data list structure; that is,
+        if latitude is first in the list of dimensions, the outermost list
+        in the data list must represent latitude.
+
+        :param dims:
+            The new list of variable dimensions
         :return:
             This NetCDFWriter instance
         """
-        # Integrity checks for attribute name.
-        if attr_name is None:
-            raise ValueError("Attrribute name must not be None")
-        elif type(attr_name) != str:
-            raise TypeError("Attribute name must be of type str"
-                            " (is {})".format(type(attr_name)))
-        elif attr_name == '':
-            raise ValueError("Attribute name must be a non-empty string")
+        if dims is None:
+            raise ValueError("dimensions cannot be None")
+        elif type(dims) != list:
+            raise TypeError("dimensions must be of type list")
+        elif len(dims) == 0:
+            raise ValueError("dimensions must contain at least one element")
 
-        # Integrity checks for attribute value.
-        if attr_val is None:
-            raise ValueError("Attribute value must not be None")
-        elif type(attr_val) != str:
-            raise TypeError("Attribute value must be of type str"
-                            " (is {})".format(type(attr_val)))
+        self._dimensions = []
+        for dimension in dims:
+            self.add_dimension(dimension)
 
-        self._global_attrs[attr_name] = attr_val
         return self
 
-    def dimension(self: 'NetCDFWriter',
-                  dim_name: str,
-                  dim_type: type,
-                  dim_size: Union[int, None]) -> 'NetCDFWriter':
+    def add_dimension(self, dim):
         """
         Adds a new variable dimension to the end of the current list
         of dimensions.
 
-        Preconditions:
-            dim_name != ''
-            dim_size > 0
+        A variable dimension must be a tuple of length 3, where the first
+        element is a str, the second is a type, and the third is an int.
 
-        :param dim_name:
-            The name of the new dimension
-        :param dim_type:
-            The type of the new dimension's values
-        :param dim_size:
-            The number of entries in the dimension, or None if the dimension
-            is to have unlimited size
+        The first element of each tuple, the str, represents the name of
+        the dimension (e.g. latitude, time). The type element is the type
+        that will be stored (e.g. numpy.int32). The third int type is the
+        size of the dimension, or the expected number of elements. Leave as
+        None for an unlimited size dimension.
+
+        The nth dimension added will correspond to the nth nested layer of
+        lists within the data list.
+
+        :param dim:
+            A new variable dimension
         :return:
             This NetCDFWriter instance
         """
-        # Integrity checks for dimension name.
-        if dim_name is None:
-            raise ValueError("Dimension name must not be None")
-        elif type(dim_name) != str:
-            raise TypeError("Dimension name must be of type str"
-                            " (is {})".format(type(dim_name)))
-        elif dim_name == '':
-            raise ValueError("Dimension name must be a non-empty string")
+        if dim is None:
+            raise ValueError("dim cannot be None")
+        elif type(dim) != tuple:
+            raise TypeError("dim must be of type tuple")
+        elif len(dim) != 3:
+            raise ValueError("dim must contain exactly 3 elements")
+        elif type(dim[0]) != str \
+                or type(dim[1]) != type\
+                or type(dim[2]) != int:
+            raise ValueError("dim must contain a str followed by "
+                             "a type followed by an int")
+        elif dim in self._dimensions:
+            raise ValueError("Dimension {} already present".format(dim[0]))
 
-        # Integrity checks for dimension type.
-        if dim_type is None:
-            raise ValueError("Dimension type must not be None")
-        elif type(dim_type) != type:
-            raise TypeError("Dimension type must be of type type"
-                            " (is {})".format(type(dim_type)))
-
-        # Integrity checks for dimension size.
-        if dim_size is not None:
-            if type(dim_size) != int:
-                raise TypeError("Dimension size must be of type int or None"
-                                " (is {})".format(type(dim_size)))
-            elif dim_size <= 0:
-                raise ValueError("Dimension size must be greater than 0"
-                                 "(is {})".format(dim_size))
-
-        self._dimensions[dim_name] = {
-            DIM_TYPE_KEY: dim_type,
-            DIM_SIZE_KEY: dim_size
-        }
-
+        self._dimensions.append(dim)
         return self
 
-    def variable(self: 'NetCDFWriter',
-                 var_name: str,
-                 var_type: type,
-                 var_dims: List[str]) -> 'NetCDFWriter':
-        """
-        Add a new variable to be written, or replace any existing variable with
-        the same name.
-
-        The last argument specifies all the dimensions associated with this new
-        variable. Each dimension must have already been registered in this
-        Writer or else a ValueError will be raised.
-
-        Dimensions in the list should be in the same order as they appear in
-        the variable's actual data. For example, if the first dimension in a
-        variable's data array is time, then 'time' should be the first element
-        in the dimensions list. It will be written to the file as such.
-
-        Preconditions:
-            var_name != ''
-            each element of var_dims must be registered as a dimension
-
-        :param var_name:
-            The name of the new variable
-        :param var_type:
-            The type of the new variable
-        :param var_dims:
-            The list of dimensions associated with the new variable, in
-            order of appearance in the variable's data array
-        :return:
-            This NetCDFWriter instance
-        """
-        # Integrity checks for variable name.
-        if var_name is None:
-            raise ValueError("Variable name must not be None")
-        elif type(var_name) != str:
-            raise TypeError("Variable name must be of type str"
-                            " (is {})".format(type(var_name)))
-        elif var_name == '':
-            raise ValueError("Variable name must be non-empty")
-
-        # Integrity checks for variable type.
-        if var_type is None:
-            raise ValueError("Variable type must not be None")
-        elif type(var_type) != type:
-            raise TypeError("Variable type must be of type type"
-                            " (is {})".format(type(var_type)))
-
-        # Integrity checks for variable dimensions.
-        if var_dims is None:
-            # None is considered as a way of specifying empty dimensions.
-            var_dims = []
-        if type(var_dims) != list:
-            raise TypeError("Variable dimensions must be of type list"
-                            " (is {})".format(type(var_dims)))
-
-        # Integrity checks for each dimension listed for the variable.
-        for i in range(len(var_dims)):
-            dim = var_dims[i]
-            if type(dim) != str:
-                raise TypeError("All variable dimensions must be type str"
-                                " (index {} is {})".format(i, type(dim)))
-            elif dim not in self._dimensions:
-                raise ValueError("All variable dimensions must be registered"
-                                 " as data dimensions ({} is not)".format(dim))
-
-        self._variables[var_name] = {
-            VAR_TYPE_KEY: var_type,
-            VAR_DIMS_KEY: var_dims,
-            VAR_ATTR_KEY: {}
-        }
-
-        return self
-
-    def variable_attribute(self: 'NetCDFWriter',
-                           var_name: str,
-                           attr_name: str,
-                           attr_val: str) -> 'NetCDFWriter':
-        """
-        Register an attribute to be added to the NetCDF output file, associated
-        with the variable var_name.
-        For example, the attribute 'units' for variable latitude may refer to
-        the string 'Degrees north of the equator.'
-
-        Preconditions:
-            var_name must be registered as a variable
-            attr_name != ''
-
-        :param var_name:
-            The name of the variable to which the attribute will be associated
-        :param attr_name:
-            The name of the new attribute
-        :param attr_val:
-            The value of the new attribute
-        :return:
-            This NetCDFWriter instance
-        """
-        # Integrity checks for variable name.
-        if var_name is None:
-            raise ValueError("Variable name must not be None")
-        elif type(var_name) != str:
-            raise TypeError("Variable name must be of type str"
-                            " (is {})".format(type(var_name)))
-        elif var_name not in self._variables:
-            raise ValueError("Variable {} not registered".format(var_name))
-
-        # Integrity checks for attribute name.
-        if attr_name is None:
-            raise ValueError("Attrribute name must not be None")
-        elif type(attr_name) != str:
-            raise TypeError("Attribute name must be of type str"
-                            " (is {})".format(type(attr_name)))
-        elif attr_name == '':
-            raise ValueError("Attribute name must be a non-empty string")
-
-        # Integrity checks for attribute value.
-        if attr_val is None:
-            raise ValueError("Attribute value must not be None")
-        elif type(attr_val) != str:
-            raise TypeError("Attribute value must be of type str"
-                            " (is {})".format(type(attr_val)))
-
-        self._variables[var_name][VAR_ATTR_KEY][attr_name] = attr_val
-        return self
-
-    def data(self: 'NetCDFWriter',
-             var_name: str,
-             data: ndarray) -> 'NetCDFWriter':
+    def data(self, data):
         """
         Submit a set of data that can be written to a NetCDF file.
 
-        The data should be passed in as either an array or an array-like
-        structure. The number of dimensions to the array should be equal
-        to the number of dimensions associated with variable var_name.
+        Only a single point of data can be loaded at once, which means that
+        if multiple variables must be added to the file, they must be added
+        separately, possibly with new variable dimensions and metadata.
 
-        Precondition:
-            var_name has already been registered as a variable
+        The data must be in the form of a multilevel nested list, where all
+        the lists at a certain level have the same length. Intuitively, the
+        lists must be arranged like an n-dimensional array.
+
+        The nth layer of nested lists is interpreted according to the nth
+        variable dimension that was loaded. Therefore, the types and sizes
+        must match up. This is evaluated upon calling for the write to take
+        place, and so no warnings are given if dimensions and data do not
+        match.
 
         :param data:
             A new variable worth of data to add into the NetCDF file
-        :param var_name:
-            The name of the variable with which the data will be associated
         :return:
             This NetCDFWriter instance
         """
         if data is None:
             raise ValueError("data cannot be None")
-        elif type(data) != ndarray:
+        elif type(data) != list:
             raise TypeError("data must be of type list")
-        elif var_name not in self._variables:
-            raise KeyError("var_name ({}) has not been registered as a"
-                           "variable".format(var_name))
 
-        self._data[var_name] = data
+        self._data = data
         return self
 
-    def write(self: 'NetCDFWriter',
-              filepath: str,
-              format: str = 'NETCDF4') -> None:
+    def variable_meta(self, var_meta):
         """
-        Use the dimensions, variables, variable data, and attributes to write a
+        Load a new set of metadata for the variable to be written.
+
+        This metadata must be in the form of a tuple containing two elements.
+        The first element, a str, is the name of the variable. The second, a
+        type, is the type (e.g. numpy.int32) with which the data will be
+        written.
+
+        :param var_meta:
+            Metadata about the main variable that will be written
+        :return:
+            This NetCDFWriter instance
+        """
+        if var_meta is None:
+            raise ValueError("var_meta cannot be None")
+        elif type(var_meta) != tuple:
+            raise TypeError("var_meta must be of type tuple")
+        elif len(var_meta) != 2 or\
+                (type(var_meta[0]) != str and type(var_meta[1]) != type):
+            raise ValueError("var_meta must contain two elements:\
+                              a str followed by a type")
+
+        self._var_meta = var_meta
+        return self
+
+    def write(self, file_name, format='NETCDF4'):
+        """
+        Use the dimensions, variable data, and variable metadata to write a
         NetCDF file with the specified format. This file is placed in the
         output directory specified in the resources.py file.
 
         Throws an error if not all the required pieces (dimensions, data,
-        variables) have been entered. These pieces are not reset after the
+        metadata) have been entered. These pieces are not reset after the
         function exits, and so it can be called successively with different
         file name arguments without having to reload data.
 
-        :param filepath:
-            An absolute or relative path to the NetCDF file to be produced
+        :param file_name:
+            The name of the NetCDF file to be produced
         :param format:
             The file format for the NetCDF file (defaults to NetCDF4)
         """
-        if len(self._data) == 0:
+        if self._data is None:
             raise ValueError("No data has been submitted to be written")
         elif len(self._dimensions) == 0:
-            raise ValueError("No data dimensions have been registered")
-        elif len(self._variables) == 0:
-            raise ValueError("No variables have been registered")
-
-        for variable in self._variables:
-            if variable not in self._data:
-                raise LookupError("No data has been submitted for variable"
-                                  "{}".format(variable))
+            raise ValueError("No data dimensions have been specified")
+        elif self._var_meta is None:
+            raise ValueError("No variable metadata has been entered")
 
         # Create a new NetCDF dataset in memory.
-        output_dataset = Dataset(filepath, 'w', format)
-
-        # Load global attributes.
-        for attr_name, attr_val in self._global_attrs.items():
-            setattr(output_dataset, attr_name, attr_val)
+        file_path = OUTPUT_PATH + file_name + '.nc'
+        output_file = Dataset(file_path, 'w', format)
 
         # Create dimensions within the dataset.
-        for dim_name in self._dimensions:
-            dim_type = self._dimensions[dim_name][DIM_TYPE_KEY]
-            dim_size = self._dimensions[dim_name][DIM_SIZE_KEY]
+        for dim in self._dimensions:
+            dim_name = dim[0]
+            dim_type = dim[1]
+            dim_size = dim[2]
 
-            output_dataset.createDimension(dim_name, dim_size)
-            output_dataset.createVariable(dim_name, dim_type, (dim_name,))
+            output_file.createDimension(dim_name, dim_size)
+            output_file.createVariable(dim_name, dim_type, (dim_name,))
 
-        for var_name in self._variables:
-            var_type = self._variables[var_name][VAR_TYPE_KEY]
-            var_dims = tuple(self._variables[var_name][VAR_DIMS_KEY])
-            var_attrs = self._variables[var_name][VAR_ATTR_KEY]
+        var_name = self._var_meta[0]
+        var_type = self._var_meta[1]
 
-            # Load the main variable data into the dataset, using
-            # all dimensions.
-            var = output_dataset.createVariable(var_name, var_type, var_dims)
-
-            # Load variable attributes.
-            for attr_name, attr_val in var_attrs.items():
-                setattr(var, attr_name, attr_val)
-
-            var[:] = self._data[var_name]
+        # Load the main variable data into the dataset, using all dimensions.
+        all_dims = tuple([dim[0] for dim in self._dimensions])
+        one_var = output_file.createVariable(var_name, var_type, all_dims)
+        one_var[:] = self._data
 
         # Finally, write the file to disk.
-        output_dataset.close()
+        output_file.close()
