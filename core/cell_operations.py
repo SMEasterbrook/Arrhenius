@@ -3,7 +3,7 @@ CONST_A = 4.6543
 CONST_B = 1435.264
 CONST_C = -64.848
 
-TRANSPARENCY ={
+TRANSPARENCY = {
     (1.0, .3): .372, (1.0, .5): .350, (1.0, 1.0): .307, (1.0, 1.5): .269,
     (1.0, 2.0): .239, (1.0, 3.0): .193, (1.0, 4.0): .160, (1.0, 6.0): .107,
     (1.0, 10.0): .089,
@@ -32,11 +32,11 @@ TRANSPARENCY ={
     (10.0, 2.0): .035, (10.0, 3.0): .024, (10.0, 4.0): .018, (10.0, 6.0): .010,
     (10.0, 10.0): .0026,
     (20.0, .3):  .029, (20.0, .5): .025, (20.0, 1.0): .022, (20.0, 1.5): .018,
-    (20.0, 2.0): .015, (20.0, 3.0): .010, (20.0, 4.0): .0075, (20.0, 6.0): .0039,
-    (20.0, 10.0): .0007,
-    (40.0, .3):  .0088, (40.0, .5): .0081, (40.0, 1.0): .0067, (40.0, 1.5): .0056,
-    (40.0, 2.0): .0046, (40.0, 3.0): .0032, (40.0, 4.0): .0024, (40.0, 6.0): .0012,
-    (40.0, 10.0): .0002
+    (20.0, 2.0): .015, (20.0, 3.0): .010, (20.0, 4.0): .0075,
+    (20.0, 6.0): .0039, (20.0, 10.0): .0007,
+    (40.0, .3):  .0088, (40.0, .5): .0081, (40.0, 1.0): .0067,
+    (40.0, 1.5): .0056, (40.0, 2.0): .0046, (40.0, 3.0): .0032,
+    (40.0, 4.0): .0024, (40.0, 6.0): .0012, (40.0, 10.0): .0002
 }
 
 MEAN_PATH = {
@@ -56,13 +56,13 @@ MEAN_PATH = {
 }
 
 
-def calculate_transparency(CO2: float,
+def calculate_transparency(co2: float,
                            temperature: float,
                            relative_humidity: float) -> float:
     """
     Calculate the transparency for a grid cell with the given data.
 
-    :param CO2:
+    :param co2:
         The amount of CO2 in the atmosphere
 
     :param temperature:
@@ -74,18 +74,19 @@ def calculate_transparency(CO2: float,
         The B value corresponding to a grid cell with the given conditions
     """
     water_vapor = calculate_water_vapor(temperature, relative_humidity)
-    p = calculate_mean_path(CO2, water_vapor)
+    p = calculate_mean_path(co2, water_vapor)
+
     # find transparency percent from preprogrammed table
     keys = list(TRANSPARENCY.keys())
-    closest_CO2 = keys[0][0]
-    closest_water_vapor = keys[0][1]
+    closest_co2 = keys[0][0]
+    closest_h2o = keys[0][1]
     for key in keys:
-        if abs(p * CO2 - key[0]) < abs(p * CO2 - closest_CO2):
-            closest_CO2 = key[0]
-        if abs(p * water_vapor - key[1]) < abs(p * water_vapor - closest_water_vapor):
-            closest_water_vapor = key[1]
+        if key[0] < p * co2:
+            closest_co2 = key[0]
+        if abs(p * water_vapor - key[1]) < abs(p * water_vapor - closest_h2o):
+            closest_h2o = key[1]
 
-    transparency = TRANSPARENCY.get((closest_CO2, closest_water_vapor))
+    transparency = TRANSPARENCY.get((closest_co2, closest_h2o))
     return transparency
 
 
@@ -103,15 +104,18 @@ def calculate_water_vapor(temperature: float,
         in Arrhenius' units. The unit = 1 when absolute humidity is
         10 grams per cubic meter.
     """
-    # use Antoine equation from 1888 to calculate saturation water vapor pressure
-    # equation constants A, B, & C from:
-    # https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=4&Type=ANTOINE&Plot=on#ANTOINE
-    temp_Kelvin = temperature
-    pressure_saturation = 10 ** (CONST_A - (CONST_B/(temp_Kelvin + CONST_C)))
-    #convert pressure from bar to Pascals
-    pressure_saturation = pressure_saturation *100000
+    # use Antoine equation from 1888 to calculate saturation water vapor
+    # pressure equation constants A, B, & C from:
+    # https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=4
+    #                                        &Type=ANTOINE&Plot=on#ANTOINE
+
+    pressure_saturation = 10 ** (CONST_A - (CONST_B/(temperature + CONST_C)))
+
+    # convert pressure from bar to Pascals
+    pressure_saturation = pressure_saturation * 100000
     pressure_water_vapor = relative_humidity / 100 * pressure_saturation
-    absolute_humidity = 2.16679 * pressure_water_vapor / temp_Kelvin
+
+    absolute_humidity = 2.16679 * pressure_water_vapor / temperature
     return absolute_humidity / 10
 
 

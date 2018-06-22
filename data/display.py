@@ -208,4 +208,4 @@ class ModelOutput:
             # Produce and save the image.
             print("\tSaving image...")
             g = ModelImageRenderer(self._data[i], grid=self._grid)
-            g.save_image(img_path)
+            g.save_image(img_path, (-8, 8))
