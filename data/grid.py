@@ -105,6 +105,68 @@ def extract_multidimensional_grid_variable(grids: Union[list, 'LatLongGrid'],
         return np.array(grid_values)
 
 
+class GridDimensions:
+    """
+    A representation of dimensions in a flat latitude/longitude grid.
+
+    Grid dimensions can be described in multiple ways. For example, a grid
+    can be defined by having cells that are all 1 degree latitude by 1 degree
+    longitude, or the same grid can be equivalently be described as having
+    180 cells in a latitude band and 360 cells in a longitude band. This class
+    serves as an access point and conversion medium between grid dimension
+    types.
+
+    This class is not a grid in itself, and contains no data aside from the
+    dimensions of a grid.
+    """
+    def __init__(self: 'GridDimensions',
+                 dims: Tuple[int, int],
+                 dims_form: str = "width") -> None:
+        """
+        Initialize a new set of grid dimensions based on the tuple parameter.
+
+        By default, the two elements in the tuple are interpreted width and
+        height of a grid cell in the grid, in degrees latitude and degrees
+        longitude respectively. From this, the real dimensions of the grid
+        can be found. This behaviour is also maintained if the optional second
+        parameter is included with value 'width'.
+
+        If the optional second parameter is given value 'count', then the
+        numbers in the tuple are interpreted as the number of grid cells in
+        a latitude band and a longitude band, respectively.
+
+        If the second parameter is given any value other than 'width' or
+        'count', an error will be raised.
+
+        :param dims:
+            A tuple of two numbers that indicate the size of the grid
+        :param dims_form:
+            A string describing how to interpret the grid dimensions
+        """
+        # Integrity checks for dims
+        if type(dims) != tuple:
+            raise TypeError("dims must be a tuple of exactly 2 elements"
+                            "(is type {})".format(type(dims)))
+        elif len(dims) != 2:
+            raise ValueError("dims must be a tuple of exactly 2 elements"
+                             "(is length {})".format(len(dims)))
+        elif type(dims[0]) != int:
+            raise TypeError("All elements of dims must be integers"
+                            "(element 0 is type {})".format(type(dims[0])))
+        elif type(dims[1]) != int:
+            raise TypeError("All elements of dims must be integers"
+                            "(element 1 is type {}".format(type(dims[1])))
+
+        # Integrity checks for dims_form
+        if dims_form == "width":
+            self._grid_by_count = convert_grid_format(dims)
+        elif dims_form == "count":
+            self._grid_by_count = dims
+        else:
+            raise ValueError("dims_form must be either 'width' or 'count'"
+                             "(is {})".format(dims_form))
+
+
 class GridCell:
     """
     A single cell within a latitude-longitude grid overlaid over Planet Earth.
