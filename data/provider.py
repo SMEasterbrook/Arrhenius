@@ -251,7 +251,7 @@ def arrhenius_temperature_data(grid: Tuple[int, int] = (10, 20),
     # Regrid the humidity variable to the specified grid, if necessary.
     regridded_data = _regrid_netcdf_variable(dataset, data[:], grid, 3)
 
-    return regridded_data
+    return regridded_data + 273.15
 
 
 def berkeley_temperature_data(grid: tuple = (180, 360),

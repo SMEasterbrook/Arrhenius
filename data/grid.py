@@ -125,19 +125,19 @@ class GridCell:
         if they are required.
 
         Preconditions:
-            -273.0 <= temp
+            0 <= temp
             0.0 <= r_hum <= 100.0
             0.0 <= albedo <= 1.0
 
         :param temp:
-            Average temperature, in degrees Celsius, within the grid cell
+            Average temperature, in Kelvin, within the grid cell
         :param r_hum:
             Average relative humidity within the grid cell, in percent
         :param albedo:
             Average surface albedo within the grid cell
         """
-        if temp < -273:
-            raise ValueError("Value for temperature must be greater than -273"
+        if temp < 0:
+            raise ValueError("Value for temperature must be greater than 0"
                              "(is {})".format(temp))
         elif r_hum < 0 or r_hum > 100:
             raise ValueError("Value for relative humidity must fall in"
@@ -146,7 +146,7 @@ class GridCell:
             raise ValueError("Value for albedo must fall in [0, 1] (is {})"
                              .format(albedo))
 
-        self._temperature = temp + 273.15
+        self._temperature = temp
         self._rel_humidity = r_hum
         self._albedo = albedo
 
