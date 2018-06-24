@@ -1,8 +1,11 @@
 from core.cell_operations import calculate_transparency
 
+from data.grid import GridDimensions
 from data.collector import ClimateDataCollector
 from data.display import ModelOutput
 import data.provider as pr
+
+import numpy as np
 from typing import List
 
 
@@ -48,16 +51,16 @@ def calculate_cell_temperature(init_co2: float, new_co2: float,
     init_transparency = calculate_transparency(init_co2,
                                                init_temperature,
                                                relative_humidity)
-    K = calibrate_constant(init_temperature, albedo, init_transparency)
+    k = calibrate_constant(init_temperature, albedo, init_transparency)
 
     mid_transparency = calculate_transparency(new_co2,
                                               init_temperature,
                                               relative_humidity)
-    mid_temperature = get_new_temperature(albedo, mid_transparency, K)
+    mid_temperature = get_new_temperature(albedo, mid_transparency, k)
     final_transparency = calculate_transparency(new_co2,
                                                 mid_temperature,
                                                 relative_humidity)
-    final_temperature = get_new_temperature(albedo, final_transparency, K)
+    final_temperature = get_new_temperature(albedo, final_transparency, k)
     return final_temperature
 
 
@@ -99,40 +102,87 @@ def get_new_temperature(albedo: float,
     return pow((k / denominator), 1 / 4)
 
 
-def print_avg_lat_changes(grid: 'LatLongGrid') -> None:
+def latitude_band_avg(grid: 'LatLongGrid',
+                      lat: int) -> None:
     """
-    Print the average temperature change for each latitude band
-    in each provided grid
+    Returns the average temperature change for the latitude band specified.
+    The second parameter gives the number of latitude bands between the
+    one to print and the bottom of the map. For example, the southernmost
+    latitude band is given by lat equal to 0.
 
     :param grid:
         A latitude longitude grid
+    :param lat:
+        The number of latitude bands between the one to be printed and the
+        south pole
+    :return:
+        The average temperature change over the latitude band
     """
 
-    grid_size = grid.grid_dimensions("count")
-    latitudes = []
+    grid_size = grid.dimensions().dims_by_count()
+    row_total = 0
+    for lon in range(grid_size[1]):
+        row_total += grid.get_coord(lon, lat).get_temperature_change()
 
-    for lat in range(grid_size[0]):
-        row_total = 0
+    return row_total / grid_size[1]
 
-        for lon in range(grid_size[1]):
-            row_total += grid.get_coord(lon, lat).get_temperature_change()
 
-        latitudes.append(row_total / grid_size[1])
+def format_row(headings: List,
+               length: int = 10) -> str:
+    temp = []
+    for i in range(len(headings)):
+        temp.append(str(headings[i]))
 
-    print("Latitude Band Averages:", latitudes)
+        if len(temp[i]) > length:
+            temp[i] = temp[i][:length]
+        elif len(temp[i]) < length:
+            temp[i] = " " + temp[i]
+            temp[i] = temp[i].ljust(length, " ")
+
+    return "|".join(temp)
+
+
+def get_model_results_table(grids: List['LatLongGrid']) -> np.ndarray:
+    """
+    Returns an array, representing the average temperature changes within the
+    latitude bands in all grids provided.
+
+    The array is structured such that the first index indicates latitude,
+    measured in how many latitude bands exist between the index in question
+    and the south pole. For example, index 0 into the second dimension of
+    the array has 0 bands between it and the south pole, and is therefore
+    the southernmost band.
+
+    The second index in the array represents time, divided into as many
+    segments as the grids were built on. That is, the length of the array's
+    first dimension will be equal to the length of the list of grids passed
+    in, as the length of that list is the number of time segments.
+
+    :param grids:
+        A list of latitude/longitude grids
+    :return:
+        An array of average temperature changes for each latitude band in
+        the grids
+    """
+    grid_dims = grids[0].dimensions().dims_by_count()
+    results_table = []
+
+    for lat in range(grid_dims[0]):
+        results_row = [latitude_band_avg(grid, lat) for grid in grids]
+        results_table.append(results_row)
+
+    return np.array(results_table)
 
 
 if __name__ == '__main__':
-    grid_dims = (10, 20)
+    grid_dims = GridDimensions((10, 20))
     grid_cells = ClimateDataCollector(grid_dims) \
         .use_temperature_source(pr.arrhenius_temperature_data) \
         .use_humidity_source(pr.arrhenius_humidity_data) \
         .use_albedo_source(pr.landmask_albedo_data) \
         .get_gridded_data()
 
-    run_model(1, 0.67, grid_cells)
-    for grid in grid_cells:
-        print_avg_lat_changes(grid)
+    run_model(1, 2, grid_cells)
 
-    writer = ModelOutput("arrhenius_out", grid_cells, grid_dims)
+    writer = ModelOutput("arrhenius_x2", grid_cells)
     writer.write_output()
