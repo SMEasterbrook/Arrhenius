@@ -76,7 +76,7 @@ def calibrate_constant(temperature, albedo, transparency) -> float:
     """
     return pow(temperature, 4) * (1 + albedo * transparency)
 
-
+  
 def get_new_temperature(albedo: float, new_transparency: float, K: float) -> float:
     """
     Calculate the new temperature after a change in absorption coefficient
@@ -102,7 +102,6 @@ def print_avg_lat_changes(grid: 'LatLongGrid') -> None:
 
     :param grid_cells: A list of grid
     """
-
     grid_size = grid.grid_dimensions("count")
     latitudes = []
 
@@ -131,3 +130,17 @@ if __name__ == '__main__':
 
     writer = ModelOutput("arrhenius_out", grid_cells, grid_dims)
     writer.write_output()
+    grid_number = 1
+    result = ""
+    for grid in grid_cells:
+        result = result + "===== Grid " + str(grid_number) + " ===== \n"
+        for latitude in grid:
+            avg_temp_change = 0
+            count = 0
+            for cell in latitude:
+                avg_temp_change += cell.get_temperature_change()
+                count += 1
+            avg_temp_change = avg_temp_change / count
+            result = result + "\t\t" + str(latitude[0].get_latitude()) \
+                     + ": " + str(avg_temp_change) + " degrees Celcius \n"
+    print(result)
