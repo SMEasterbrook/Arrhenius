@@ -1,8 +1,12 @@
-import cell_operations
+from core import cell_operations
+from data.grid import LatLongGrid
+from data.collector import ClimateDataCollector
+from data.display import ModelOutput
+import data.provider as pr
 from typing import List
 
 
-def run_model(init_CO2: float, new_CO2: float, grid_cells: List[List[List['GridCell']]]) -> None:
+def run_model(init_co2: float, new_co2: float, grid_cells: List['LatLongGrid']) -> None:
     """
     Calculate Earth's surface temperature change due to
     a change in CO2 levels.
@@ -15,16 +19,13 @@ def run_model(init_CO2: float, new_CO2: float, grid_cells: List[List[List['GridC
         The grid cell objects containing gridded temp and humidity data
     """
     for grid in grid_cells:
-        for latitude in grid:
-            for cell in latitude:
-                new_temp = calculate_cell_temperature_change(init_CO2, new_CO2, cell)
-                cell.set_temperature_change(new_temp)
-
-    print_avg_lat_changes(grid_cells)
+        for cell in grid:
+            new_temp = calculate_cell_temperature(init_co2, new_co2, cell)
+            cell.set_temperature(new_temp)
 
 
-def calculate_cell_temperature_change(init_CO2: float, new_CO2: float,
-                                      grid_cell: 'GridCell') -> float:
+def calculate_cell_temperature(init_CO2: float, new_CO2: float,
+                               grid_cell: 'GridCell') -> float:
     """
     Calculate the change in temperature of a specific grid cell due to a
     change in CO2 levels in the atmosphere.
@@ -54,9 +55,8 @@ def calculate_cell_temperature_change(init_CO2: float, new_CO2: float,
     final_transparency = cell_operations.calculate_transparency(new_CO2,
                                                                 mid_temperature,
                                                                 relative_humidity)
-    final_temperature_change = get_new_temperature(albedo, final_transparency, K) \
-                               - init_temperature
-    return final_temperature_change
+    final_temperature = get_new_temperature(albedo, final_transparency, K)
+    return final_temperature
 
 
 def calibrate_constant(temperature, albedo, transparency) -> float:
@@ -74,9 +74,9 @@ def calibrate_constant(temperature, albedo, transparency) -> float:
     :return:
         The calculated constant K
     """
-    return pow(temperature, 4) * (1 + (1 - albedo) * transparency)
+    return pow(temperature, 4) * (1 + albedo * transparency)
 
-
+  
 def get_new_temperature(albedo: float, new_transparency: float, K: float) -> float:
     """
     Calculate the new temperature after a change in absorption coefficient
@@ -91,18 +91,45 @@ def get_new_temperature(albedo: float, new_transparency: float, K: float) -> flo
     :return:
         The change in temperature for a grid cell with the given change in B
     """
-    denominator = 1 + (1 - albedo) * new_transparency
+    denominator = 1 + albedo * new_transparency
     return pow((K / denominator), 1 / 4)
 
 
-def print_avg_lat_changes(grid_cells: List[List[List['GridCell']]]) -> None:
+def print_avg_lat_changes(grid: 'LatLongGrid') -> None:
     """
     Print the average temperature change for each latitude band
     in each provided grid
 
     :param grid_cells: A list of grid
     """
+    grid_size = grid.grid_dimensions("count")
+    latitudes = []
 
+    for lat in range(grid_size[0]):
+        row_total = 0
+
+        for lon in range(grid_size[1]):
+            row_total += grid.get_coord(lon, lat).get_temperature_change()
+
+        latitudes.append(row_total / grid_size[1])
+
+    print("Outputs:", latitudes)
+
+
+if __name__ == '__main__':
+    grid_dims = (10, 20)
+    grid_cells = ClimateDataCollector(grid_dims) \
+        .use_temperature_source(pr.arrhenius_temperature_data) \
+        .use_humidity_source(pr.arrhenius_humidity_data) \
+        .use_albedo_source(pr.landmask_albedo_data) \
+        .get_gridded_data()
+
+    run_model(1, 2, grid_cells)
+    for grid in grid_cells:
+        print_avg_lat_changes(grid)
+
+    writer = ModelOutput("arrhenius_out", grid_cells, grid_dims)
+    writer.write_output()
     grid_number = 1
     result = ""
     for grid in grid_cells:
