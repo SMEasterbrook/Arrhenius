@@ -3,40 +3,40 @@ CONST_A = 4.6543
 CONST_B = 1435.264
 CONST_C = -64.848
 
-TRANSPARENCY ={
-    (1.0, .3): 37.2, (1.0, .5): 35.0, (1.0, 1.0): 30.7, (1.0, 1.5): 26.9,
-    (1.0, 2.0): 23.9, (1.0, 3.0): 19.3, (1.0, 4.0): 16.0, (1.0, 6.0): 10.7,
-    (1.0, 10.0): 8.9,
-    (1.2, .3): 34.7, (1.2, .5): 32.7, (1.2, 1.0): 28.6, (1.2, 1.5): 25.1,
-    (1.2, 2.0): 22.2, (1.2, 3.0): 17.8, (1.2, 4.0): 14.7, (1.2, 6.0): 9.7,
-    (1.2, 10.0): 8.0,
-    (1.5, .3):  31.5, (1.5, .5): 29.6, (1.5, 1.0): 25.9, (1.5, 1.5): 22.6,
-    (1.5, 2.0): 19.9, (1.5, 3.0): 15.9, (1.5, 4.0): 13.0, (1.5, 6.0): 8.4,
-    (1.5, 10.0): 6.9,
-    (2.0, .3):  27.0, (2.0, .5): 25.3, (2.0, 1.0): 21.9, (2.0, 1.5): 19.1,
-    (2.0, 2.0): 16.7, (2.0, 3.0): 13.1, (2.0, 4.0): 10.5, (2.0, 6.0): 6.6,
-    (2.0, 10.0): 5.3,
-    (2.5, .3):  23.5, (2.5, .5): 22.0, (2.5, 1.0): 19.0, (2.5, 1.5): 16.6,
-    (2.5, 2.0): 14.4, (2.5, 3.0): 11.0, (2.5, 4.0): 8.7, (2.5, 6.0): 5.3,
-    (2.5, 10.0): 4.2,
-    (3.0, .3):  20.1, (3.0, .5): 18.8, (3.0, 1.0): 16.3, (3.0, 1.5): 14.2,
-    (3.0, 2.0): 12.3, (3.0, 3.0): 9.3, (3.0, 4.0): 7.4, (3.0, 6.0): 4.2,
-    (3.0, 10.0): 3.3,
-    (4.0, .3):  15.8, (4.0, .5): 14.7, (4.0, 1.0): 12.7, (4.0, 1.5): 10.8,
-    (4.0, 2.0): 9.3, (4.0, 3.0): 7.1, (4.0, 4.0): 5.6, (4.0, 6.0): 3.1,
-    (4.0, 10.0): 2.0,
-    (6.0, .3):  10.9, (6.0, .5): 10.2, (6.0, 1.0): 8.7, (6.0, 1.5): 7.3,
-    (6.0, 2.0): 6.3, (6.0, 3.0): 4.8, (6.0, 4.0): 3.7, (6.0, 6.0): 1.9,
-    (6.0, 10.0): .93,
-    (10.0, .3):  6.6, (10.0, .5): 6.1, (10.0, 1.0): 5.2, (10.0, 1.5): 4.3,
-    (10.0, 2.0): 3.5, (10.0, 3.0): 2.4, (10.0, 4.0): 1.8, (10.0, 6.0): 1.0,
-    (10.0, 10.0): .26,
-    (20.0, .3):  2.9, (20.0, .5): 2.5, (20.0, 1.0): 2.2, (20.0, 1.5): 1.8,
-    (20.0, 2.0): 1.5, (20.0, 3.0): 1.0, (20.0, 4.0): .75, (20.0, 6.0): .39,
-    (20.0, 10.0): .07,
-    (40.0, .3):  .88, (40.0, .5): .81, (40.0, 1.0): .67, (40.0, 1.5): .56,
-    (40.0, 2.0): .46, (40.0, 3.0): .32, (40.0, 4.0): .24, (40.0, 6.0): .12,
-    (40.0, 10.0): .02
+TRANSPARENCY = {
+    (1.0, .3): .372, (1.0, .5): .350, (1.0, 1.0): .307, (1.0, 1.5): .269,
+    (1.0, 2.0): .239, (1.0, 3.0): .193, (1.0, 4.0): .160, (1.0, 6.0): .107,
+    (1.0, 10.0): .089,
+    (1.2, .3): .347, (1.2, .5): .327, (1.2, 1.0): .286, (1.2, 1.5): .251,
+    (1.2, 2.0): .222, (1.2, 3.0): .178, (1.2, 4.0): .147, (1.2, 6.0): .097,
+    (1.2, 10.0): .080,
+    (1.5, .3):  .315, (1.5, .5): .296, (1.5, 1.0): .259, (1.5, 1.5): .226,
+    (1.5, 2.0): .199, (1.5, 3.0): .159, (1.5, 4.0): .130, (1.5, 6.0): .084,
+    (1.5, 10.0): .069,
+    (2.0, .3):  .270, (2.0, .5): .253, (2.0, 1.0): .219, (2.0, 1.5): .191,
+    (2.0, 2.0): .167, (2.0, 3.0): .131, (2.0, 4.0): .105, (2.0, 6.0): .066,
+    (2.0, 10.0): .053,
+    (2.5, .3):  .235, (2.5, .5): .220, (2.5, 1.0): .190, (2.5, 1.5): .166,
+    (2.5, 2.0): .144, (2.5, 3.0): .110, (2.5, 4.0): .087, (2.5, 6.0): .053,
+    (2.5, 10.0): .042,
+    (3.0, .3):  .201, (3.0, .5): .188, (3.0, 1.0): .163, (3.0, 1.5): .142,
+    (3.0, 2.0): .123, (3.0, 3.0): .093, (3.0, 4.0): .074, (3.0, 6.0): .042,
+    (3.0, 10.0): .033,
+    (4.0, .3):  .158, (4.0, .5): .147, (4.0, 1.0): .127, (4.0, 1.5): .108,
+    (4.0, 2.0): .093, (4.0, 3.0): .071, (4.0, 4.0): .056, (4.0, 6.0): .031,
+    (4.0, 10.0): .020,
+    (6.0, .3):  .109, (6.0, .5): .102, (6.0, 1.0): .087, (6.0, 1.5): .073,
+    (6.0, 2.0): .063, (6.0, 3.0): .048, (6.0, 4.0): .037, (6.0, 6.0): .019,
+    (6.0, 10.0): .0093,
+    (10.0, .3):  .066, (10.0, .5): .061, (10.0, 1.0): .052, (10.0, 1.5): .043,
+    (10.0, 2.0): .035, (10.0, 3.0): .024, (10.0, 4.0): .018, (10.0, 6.0): .010,
+    (10.0, 10.0): .0026,
+    (20.0, .3):  .029, (20.0, .5): .025, (20.0, 1.0): .022, (20.0, 1.5): .018,
+    (20.0, 2.0): .015, (20.0, 3.0): .010, (20.0, 4.0): .0075,
+    (20.0, 6.0): .0039, (20.0, 10.0): .0007,
+    (40.0, .3):  .0088, (40.0, .5): .0081, (40.0, 1.0): .0067,
+    (40.0, 1.5): .0056, (40.0, 2.0): .0046, (40.0, 3.0): .0032,
+    (40.0, 4.0): .0024, (40.0, 6.0): .0012, (40.0, 10.0): .0002
 }
 
 MEAN_PATH = {
@@ -55,11 +55,14 @@ MEAN_PATH = {
     (3.5, .3): 1.48, (3.5, .5): 1.48, (3.5, 1.0): 1.45, (3.5, 2.0): 1.42,
 }
 
-def calculate_transparency(CO2: float, temperature: float, relative_humidity: float):
+
+def calculate_transparency(co2: float,
+                           temperature: float,
+                           relative_humidity: float) -> float:
     """
     Calculate the transparency for a grid cell with the given data.
 
-    :param CO2:
+    :param co2:
         The amount of CO2 in the atmosphere
 
     :param temperature:
@@ -71,22 +74,24 @@ def calculate_transparency(CO2: float, temperature: float, relative_humidity: fl
         The B value corresponding to a grid cell with the given conditions
     """
     water_vapor = calculate_water_vapor(temperature, relative_humidity)
-    p = calculate_mean_path(CO2, water_vapor)
+    p = calculate_mean_path(co2, water_vapor)
+
     # find transparency percent from preprogrammed table
     keys = list(TRANSPARENCY.keys())
-    closest_CO2 = keys[0][0]
-    closest_water_vapor = keys[0][1]
+    closest_co2 = keys[0][0]
+    closest_h2o = keys[0][1]
     for key in keys:
-        if abs(p * CO2 - key[0]) < abs(p * CO2 - closest_CO2):
-            closest_CO2 = key[0]
-        if abs(p * water_vapor - key[1]) < abs(p * water_vapor - closest_water_vapor):
-            closest_water_vapor = key[1]
+        if key[0] < p * co2:
+            closest_co2 = key[0]
+        if abs(p * water_vapor - key[1]) < abs(p * water_vapor - closest_h2o):
+            closest_h2o = key[1]
 
-    transparency = TRANSPARENCY.get((closest_CO2, closest_water_vapor)) / 100
+    transparency = TRANSPARENCY.get((closest_co2, closest_h2o))
     return transparency
 
 
-def calculate_water_vapor(temperature: float, relative_humidity: float):
+def calculate_water_vapor(temperature: float,
+                          relative_humidity: float) -> float:
     """
     Calculate the amount of water vapor in a grid cell with the given data.
 
@@ -99,26 +104,30 @@ def calculate_water_vapor(temperature: float, relative_humidity: float):
         in Arrhenius' units. The unit = 1 when absolute humidity is
         10 grams per cubic meter.
     """
-    # use Antoine equation from 1888 to calculate saturation water vapor pressure
-    # equation constants A, B, & C from:
-    # https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=4&Type=ANTOINE&Plot=on#ANTOINE
-    temp_Kelvin = temperature
-    pressure_saturation = 10 ** (CONST_A - (CONST_B/(temp_Kelvin + CONST_C)))
-    #convert pressure from bar to Pascals
-    pressure_saturation = pressure_saturation *100000
+    # use Antoine equation from 1888 to calculate saturation water vapor
+    # pressure equation constants A, B, & C from:
+    # https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=4
+    #                                        &Type=ANTOINE&Plot=on#ANTOINE
+
+    pressure_saturation = 10 ** (CONST_A - (CONST_B/(temperature + CONST_C)))
+
+    # convert pressure from bar to Pascals
+    pressure_saturation = pressure_saturation * 100000
     pressure_water_vapor = relative_humidity / 100 * pressure_saturation
-    absolute_humidity = 2.16679 * pressure_water_vapor / temp_Kelvin
+
+    absolute_humidity = 2.16679 * pressure_water_vapor / temperature
     return absolute_humidity / 10
 
 
-def calculate_mean_path(CO2: float, water_vapor: float):
+def calculate_mean_path(co2: float,
+                        water_vapor: float) -> float:
     """
     Calculate the mean path coefficient for a grid cell with the given data.
     The mean path is the distance that all radiation that emanates from a
     single point would need to travel if the rays went straight instead of
     at different angles relative to the earth's surface.
 
-    :param CO2:
+    :param co2:
         The amount of CO2 in the atmosphere
     :param water_vapor:
         The amount of water vapor in the air in Arrhenius' units
@@ -132,4 +141,4 @@ def calculate_mean_path(CO2: float, water_vapor: float):
         if abs(water_vapor - key[1]) < abs(water_vapor - closest_water_vapor):
             closest_water_vapor = key[1]
 
-    return MEAN_PATH.get((CO2, closest_water_vapor))
+    return MEAN_PATH.get((co2, closest_water_vapor))
