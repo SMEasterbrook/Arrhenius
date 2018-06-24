@@ -392,21 +392,13 @@ class LatLongGrid:
 
     def dimensions(self: 'LatLongGrid') -> Union['GridDimensions', None]:
         """
-        Returns a two-element tuple containing the dimensions of the grid.
-        The first element represent latitude, and the second represents
-        longitude.
+        Returns a set of grid dimensions that matches the size of the data
+        that forms the grid.
 
-        The optional grid_form argument allows specification of the format
-        of the grid returned. If given the value 'width' (default), then each
-        number in the tuple represents the width of a single grid cell in
-        degrees; if given the value 'count', then each number in the grid
-        is how many cells it takes to circle the globe in the appropriate
-        dimension.
-
-        Returns (0, 0) if no data has been provided from which to form a grid.
+        Returns None if no data has been provided from which to form a grid.
 
         :return:
-            A tuple containing the dimensions of this grid
+            The dimensions of this instance's gridded data
         """
         if self._data is None:
             return None
