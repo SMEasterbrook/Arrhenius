@@ -125,7 +125,7 @@ class OutputController:
         self._output_types = {}
 
     def _navigate_collection_path(self: 'OutputController',
-                                  collection_path: Tuple[str]) -> Dict:
+                                  collection_path: Tuple[str, ...]) -> Dict:
         """
         Returns the collection structure specified by the single argument.
 
@@ -185,7 +185,7 @@ class OutputController:
 
     def register_collection(self: 'OutputController',
                             collection_name: str,
-                            supercollections: Tuple[str] = (),
+                            supercollections: Tuple[str, ...] = (),
                             handler: Optional[CollectionHandler] = None) -> None:
         """
         Creates a new collection in the collection directory, without any
@@ -231,7 +231,7 @@ class OutputController:
             collection[COLLECTION_HANDLERS] = handler
 
     def enable_collection_type(self: 'OutputController',
-                               collection_path: Tuple[str],
+                               collection_path: Tuple[str, ...],
                                output_type: 'OutputConfig') -> None:
         """
         Record that a given output type is enabled within a collection.
@@ -256,7 +256,7 @@ class OutputController:
             collection[COLLECTION_SUBTYPES].add(output_type)
 
     def submit_collection_output(self: 'OutputController',
-                                 collection_path: Tuple[str],
+                                 collection_path: Tuple[str, ...],
                                  data: object) -> None:
         """
         Submit data for output, associated with the collection described by
@@ -283,3 +283,80 @@ class OutputController:
         collection = self._navigate_collection_path(collection_path)
         handler = collection[COLLECTION_HANDLERS]
         handler(self._title, collection, data)
+
+
+# Standard collection names.
+PRIMARY_OUTPUT = "Out"
+DATASET_VARS = "DS_Vars"
+IMAGES = "Img"
+
+# Full paths to standard collections.
+PRIMARY_OUTPUT_PATH = (PRIMARY_OUTPUT,)
+DATASET_VARS_PATH = (PRIMARY_OUTPUT, DATASET_VARS)
+IMAGES_PATH = (PRIMARY_OUTPUT, IMAGES)
+
+
+def empty_output_config(title: str) -> 'OutputController':
+    """
+    Returns a OutputController instance with basic collection structure
+    initialized, but without any output types or handlers added.
+
+    The basic structure is as follows:
+    A collection with a name given by the PRIMARY_OUTPUT constant contains
+    any configuration for final model output. It contains two child
+    collections, whose names are given by the constants DATASET_VARS and
+    IMAGES.
+
+    The DATASET_VARS collection contains configuration for which variables
+    are included in the dataset file produced after the model run. The IMAGES
+    collection determines which variables are rendered as image file maps.
+
+    Further changes or additions may be made to this instance.
+
+    :param title:
+        The name of this model run
+    :return:
+        An empty output controller, with basic collection structure
+    """
+    controller = OutputController(title)
+
+    # Create empty collections.
+    controller.register_collection(PRIMARY_OUTPUT)
+    controller.register_collection(IMAGES, PRIMARY_OUTPUT_PATH)
+    controller.register_collection(DATASET_VARS, PRIMARY_OUTPUT_PATH)
+
+    return controller
+
+
+def default_output_config(title: str) -> 'OutputController':
+    """
+    Returns an OutputController instance with default settings.
+
+    Default settings includes the basic collection structure as described
+    under empty_output_config, and no other collections. The PRIMARY_OUTPUT
+    collection has debug status reports enabled. Both of its children have
+    temperature change enabled, and no other variables.
+
+    No other variables are enabled. Further changes may be made to this
+    instance.
+
+    :param title:
+        The name of this model run
+    :return:
+        An output controller with default settings
+    """
+    controller = empty_output_config(title)
+
+    # Set primary output handler function.
+    # Placeholder is print until a proper output function is developed.
+    controller.register_collection(PRIMARY_OUTPUT, handler=print)
+
+    # Add output types to collections.
+    controller.enable_collection_type(PRIMARY_OUTPUT_PATH,
+                                      Debug.PRINT_NOTICES)
+    controller.enable_collection_type(DATASET_VARS_PATH,
+                                      ReportDatatype.REPORT_TEMP_CHANGE)
+    controller.enable_collection_type(IMAGES_PATH,
+                                      ReportDatatype.REPORT_TEMP_CHANGE)
+
+    return controller
