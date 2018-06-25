@@ -71,3 +71,42 @@ class Debug(OutputConfig):
     GRID_CELL_DELTA_TRANSPARENCY = auto()
     # Prints progress information at important stages in the model run.
     PRINT_NOTICES = auto()
+
+
+class OutputController:
+    """
+    An control point for model output. Acts as a logging center, allowing
+    configuration of which output forms are permitted for each model run in
+    an individual fashion.
+
+    Forms of output are identified with enum types that subclass OutputConfig.
+    Each enum within the class is a separate output form, and act
+    independently. An enum type can be registered, enabling any output that is
+    associated with that type. Output for any non-registered types is not
+    allowed to go forward.
+
+    Collections of output types allow all the output types to be handled at
+    the same time. Collections are registered using a string, and can contain
+    multiple enum types and any number of other collections within them.
+
+    Each collection or output type requires a handler function that is
+    executed on any data that is associated with that collection or type.
+    For collections, the collection's substructure is passed into the handler
+    along with the data, so that the handler may know which output types were
+    registered in the collection.
+    """
+    def __init__(self: 'OutputController',
+                 model_run_title: str) -> None:
+        """
+        Create a new OutputController. Initially, no output types or
+        collections are registered in the controller.
+
+        A title parameter describes the model run, and should be unique and
+        informative. The title may be used for some output types.
+
+        :param model_run_title:
+            The title of the model run
+        """
+        self._title = model_run_title
+        self._collections = {}
+        self._output_handlers = {}
