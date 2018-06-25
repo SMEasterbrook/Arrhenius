@@ -128,6 +128,9 @@ if __name__ == '__main__':
         .use_albedo_source(pr.landmask_albedo_data) \
         .get_gridded_data()
 
+    conf = cnf.DEFAULT_CONFIG
+    conf[cnf.CO2_WEIGHT] = cnf.WEIGHT_BY_PROXIMITY
+    conf[cnf.H2O_WEIGHT] = cnf.WEIGHT_BY_PROXIMITY
     run_model(1, 2, grid_cells)
 
     writer = ModelOutput("arrhenius_x2", grid_cells)
