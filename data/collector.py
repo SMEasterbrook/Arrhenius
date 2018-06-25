@@ -1,5 +1,11 @@
-import numpy as np
-import provider as pr
+from typing import List, Callable, Union
+from data.grid import LatLongGrid, GridCell, GridDimensions
+
+from data.provider import REQUIRE_TEMP_DATA_INPUT
+
+
+# Type aliases
+CDC = 'ClimateDataCollector'
 
 
 class ClimateDataCollector:
@@ -7,72 +13,55 @@ class ClimateDataCollector:
     Assembles various types of data, including surface temperature, albedo,
     and atmospheric absorbption coefficients, and ensures that data formatting
     is consistent between data types.
-
     Designed for flexibility in data sources, and allows for sources to be
     swapped out during execution. This may be used to try out different dataset
     files to test performance, or to input stub or mock data providers to help
     test functionality.
     """
 
-    def __init__(self, grid=None):
+    def __init__(self: CDC,
+                 grid: 'GridDimensions' = GridDimensions((10, 20))) -> None:
+        """
+        Instantiate a new ClimateDataCollector instance.
+        Takes an optional parameter grid, which is a set of grid dimensions.
+        If no value is provided, a default grid will be used with 18 cells in
+        each of the latitude and longitude dimensions.
+        :param grid:
+            An optional set of grid dimensions
+        """
+        # Provider functions that produce various types of data.
         self._temp_source = None
+        self._humidity_source = None
         self._albedo_source = None
         self._absorbance_source = None
+
+        # Cached data from the above sources.
         self._grid_data = None
         self._absorbance_data = None
 
-        if grid is None:
-            # Default grid dimensions give 1 by 1 degree squares.
-            self._grid = (180, 360)
-        else:
-            self.load_grid(grid)
+        self._grid = grid
 
-    def load_grid(self, grid):
+    def load_grid(self: CDC,
+                  grid: 'GridDimensions') -> CDC:
         """
         Select dimensions for a new latitude and longitude grid, to which
-        all gridded data is fitted.
-
-        The grid is reported as a tuple of two elements. The first element
-        represents the latitudinal width of a single grid cell, in degrees.
-        The second element represents the longitudinal width of a grid cell,
-        also in degrees.
-
-        For example, passing a tuple of (10, 10) would create a grid of
-        10-by-10-degree squares, with 18 divisions of latitude and 36
-        divisions of longitude.
-
-        Although floating-point values are acceptable within the tuple (e.g.
-        latitudinal width of 0.5 degrees) but the number of grid cells
-        produced is rounded to an integer.
-
+        all gridded data is fitted. Returns the collector object, so that
+        repeated builder method calls can be continued.
         :param grid:
-            A tuple denoting the size of a grid cell
+            The dimensions of the grid on which to place the data
         """
-        if grid is None:
-            raise ValueError("grid must not be None")
-        elif type(grid) != tuple:
-            raise TypeError("grid must be of type tuple (is {})".format(type(grid)))
-        elif len(grid) != 2:
-            raise ValueError("grid must contain exactly 2 elements (contains {})".format(len(grid)))
-        elif type(grid[0]) != float and type(grid[0]) != int:
-            raise ValueError("grid elements must be numeric types (element 0 is type {})".format(type(grid[0])))
-        elif type(grid[1]) != float and type(grid[0]) != int:
-            raise ValueError("grid elements must be numeric types (element 1 is type {})".format(type(grid[1])))
+        self._grid = grid
+        self._grid_data = None
+        return self
 
-        lat_size = int(180 / grid[0])
-        lon_size = int(360 / grid[1])
-
-        self._grid = (lat_size, lon_size)
-
-    def use_temperature_source(self, temp_src):
+    def use_temperature_source(self: CDC,
+                               temp_src: Callable) -> CDC:
         """
         Load a new temperature provider function, used as an access point to
         temperature data. Returns the collector object, so that repeated
         builder method calls can be continued.
-
         Calling this function voids any previously cached grid data, including
-        albedo values.
-
+        relative humidity and albedo values.
         :param temp_src:
             A new temperature provider function
         :return:
@@ -82,15 +71,31 @@ class ClimateDataCollector:
         self._grid_data = None
         return self
 
-    def use_albedo_source(self, albedo_src):
+    def use_humidity_source(self: CDC,
+                            r_hum_src: Callable) -> CDC:
+        """
+        Load a new relative humidity provider function, used as an access point
+        to humidity data. Returns the collector object, so that repeated
+        builder method calls can be continued.
+        Calling this function voids any previously cached data, including
+        temperature and albedo values.
+        :param r_hum_src:
+            A new relative humidity provider function
+        :return:
+            This ClimateDataCollector instance
+        """
+        self._humidity_source = r_hum_src
+        self._grid_data = None
+        return self
+
+    def use_albedo_source(self: CDC,
+                          albedo_src: Callable) -> CDC:
         """
         Load a new albedo provider function, used as an access point to
         surface albedo data. Returns the collector object, so that repeated
         builder method calls can be continued.
-
         Calling this function voids any previously cached grid data, including
-        temperature values.
-
+        temperature and relative humidity values.
         :param albedo_src:
             A new albedo provider function
         :return:
@@ -100,14 +105,13 @@ class ClimateDataCollector:
         self._grid_data = None
         return self
 
-    def use_absorbance_source(self, absorbance_src):
+    def use_absorbance_source(self: CDC,
+                              absorbance_src: Callable) -> CDC:
         """
         Load a new absorbance provider function, used as an access point to
         atmospheric heat absorbance data. Returns the collector object, so
         that repeated builder method calls can be continued.
-
         Calling this function voids any previously cached absorbance data.
-
         :param absorbance_src:
             A new absorbance provider function
         :return:
@@ -117,24 +121,24 @@ class ClimateDataCollector:
         self._absorbance_data = None
         return self
 
-    def get_gridded_data(self):
+    def get_gridded_data(self: CDC) -> List['LatLongGrid']:
         """
-        Combines and returns all 2-dimensional gridded surface data, including
-        surface temperature and surface albedo.
-
-        Data is returned in a 2-dimensional array of dictionaries, where each
-        dictionary acts like a JSON object. The temperature field in the dict
-        refers to an array of 12 monthly temperature values, with index 0
-        being January and index 11 being December. The albedo field refers to
-        the grid cell's surface albedo.
-
+        Combines and returns all gridded surface data, including surface
+        temperature, relative humidity, and surface albedo. The data is
+        returned having been converted to the grid loaded most recently.
+        It is assumed that temperature, relative humidity, and albedo are time
+        dependent. That is, the data arrays for those variables have three
+        dimensions, the first of which is time. It is expected that these two
+        data have the same gradations of their time dimensions, e.g.
+        temperature and humidity are both measured in 3-month segments.
         Raises an exception if not all of the required data providers have
         been loaded through builder methods.
-
         :return:
-            An array of 1-degree gridded surface data
+            An array of gridded surface data
         """
         if self._grid_data is not None:
+            # A grid was constructed with the same grid and data sources,
+            # and nothing has changed since.
             return self._grid_data
         elif self._temp_source is None:
             raise PermissionError("No temperature provider function selected")
@@ -142,46 +146,64 @@ class ClimateDataCollector:
             raise PermissionError("No albedo provider function selected")
 
         temp_data = self._temp_source(self._grid)
-        albedo_data = self._albedo_source(self._grid)
+        r_hum_data = self._humidity_source(self._grid)
 
+        if len(temp_data) != len(r_hum_data):
+            raise ValueError("Temperature and humidity must have the same"
+                             "time dimensions")
+
+        if self._albedo_source in REQUIRE_TEMP_DATA_INPUT:
+            albedo_data = self._albedo_source(temp_data, self._grid)
+        else:
+            albedo_data = self._albedo_source(self._grid)
         self._grid_data = []
+        grid_dims = self._grid.dims_by_count()
 
-        # Start building a 2-D nested list structure for output, row by row.
-        for i in range(self._grid[0]):
-            # Holding row lists in memory prevents excess list lookups.
-            albedo_row = albedo_data[i]
-            # Start creating a new list column for entry into the output list.
-            longitude_row = []
+        # Start building a 2-D nested list structure for output, row by roW.
+        for i in range(len(temp_data)):
+            temp_time_segment = temp_data[i]
+            r_hum_time_segment = r_hum_data[i]
+            albedo_time_segment = albedo_data[i]
 
-            for j in range(self._grid[1]):
-                albedo = albedo_row[j]
-                temp = temp_data[1::]
+            time_segment_row = []
+            for j in range(grid_dims[0]):
+                # Holding row lists in memory prevents excess list lookups.
+                temp_row = temp_time_segment[j]
+                r_hum_row = r_hum_time_segment[j]
+                albedo_row = albedo_time_segment[j]
+                # Start creating a new list column for entry into the output
+                # list.
+                longitude_row = []
 
-                # Create JSON-like grid cell dictionary with gridded data.
-                grid_cell_obj = {
-                    'temperature': temp,
-                    'albedo': albedo
-                }
+                for k in range(grid_dims[1]):
+                    # Package the data from this grid cell into a GridCell
+                    # object.
+                    temp = temp_row[k]
+                    r_hum = r_hum_row[k]
+                    albedo = albedo_row[k]
 
-                # Add new objects into the 2-D nested lists.
-                longitude_row.append(grid_cell_obj)
-            self._grid_data.append(longitude_row)
+                    grid_cell_obj = GridCell(temp, r_hum, albedo)
+
+                    # Add new GridCell objects into the 2-D nested lists.
+                    longitude_row.append(grid_cell_obj)
+                time_segment_row.append(longitude_row)
+
+            # Store data for this time gradation in a LatLongGrid object.
+            new_grid_data = LatLongGrid(time_segment_row)
+            self._grid_data.append(new_grid_data)
 
         return self._grid_data
 
-    def get_absorbance_data(self):
+    def get_absorbance_data(self: CDC) -> Union[List[List[float]], float]:
         """
         Builds and returns atmospheric absorbance data.
-
         This data may be in the form of a float, if the collector is using
         a simple absorbance provider function; otherwise, it may also return
         a 2-D grid with an absorbance value for different areas of the
         atmosphere. It should be possible to predict which type will be
         returned, given which absorbance provider function is in use.
-
         Raises an exception if not all of the required data providers have
         been loaded through builder methods.
-
         :return:
             Global or gridded atmospheric heat absorbance data
         """
