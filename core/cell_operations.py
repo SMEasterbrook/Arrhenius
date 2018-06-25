@@ -1,4 +1,8 @@
-from typing import Tuple
+from typing import Tuple, Callable
+
+
+# Type aliases
+WeightFunc = Callable[[float, float, float], Tuple[float, float]]
 
 
 # Constants for absolute humidity calculations
@@ -59,9 +63,9 @@ MEAN_PATH = {
 }
 
 
-def _weight_by_closest(lower_val: float,
-                       upper_val: float,
-                       desired: float) -> Tuple[float, float]:
+def weight_by_closest(lower_val: float,
+                      upper_val: float,
+                      desired: float) -> Tuple[float, float]:
     if upper_val - desired < desired - lower_val:
         return 0, 1
     else:
@@ -70,18 +74,24 @@ def _weight_by_closest(lower_val: float,
 
 def calculate_transparency(co2: float,
                            temperature: float,
-                           relative_humidity: float) -> float:
+                           relative_humidity: float,
+                           co2_weight_func: WeightFunc = weight_by_closest,
+                           h2o_weight_func: WeightFunc = weight_by_closest) -> float:
     """
     Calculate the transparency for a grid cell with the given data.
 
     :param co2:
         The amount of CO2 in the atmosphere
-
     :param temperature:
         The average temperature of the grid cell
     :param relative_humidity:
         The relative humidity of the grid cell
-
+    :param co2_weight_func:
+        Function that determine the weights of low and high estimations
+        for CO2 transparency
+    :param h2o_weight_func:
+        Function that determine the weights of low and high estimations
+        for H2O transparency
     :return:
         The B value corresponding to a grid cell with the given conditions
     """
@@ -105,10 +115,10 @@ def calculate_transparency(co2: float,
     upper_h2o = keys[min(len(keys) - 1, lower_h2o_ind + 1)][1]
 
     lower_co2_weight, upper_co2_weight = \
-        _weight_by_closest(lower_co2, upper_co2, p * co2)
+        co2_weight_func(lower_co2, upper_co2, p * co2)
 
     lower_h2o_weight, upper_h2o_weight = \
-        _weight_by_closest(lower_h2o, upper_h2o, p * h2o)
+        h2o_weight_func(lower_h2o, upper_h2o, p * h2o)
 
     co2_lower_h2o_lower = TRANSPARENCY.get((lower_co2, lower_h2o))
     co2_upper_h2o_lower = TRANSPARENCY.get((upper_co2, lower_h2o))
