@@ -1,4 +1,11 @@
 from enum import Enum, auto
+from typing import Callable
+
+from data.configuration import Config
+
+
+OUTPUT_TYPE_HANDLER = Callable[[str, object], None]
+COLLECTION_HANDLER = Callable[[str, Config, object]]
 
 
 class OutputConfig(Enum):
@@ -109,4 +116,47 @@ class OutputController:
         """
         self._title = model_run_title
         self._collections = {}
-        self._output_handlers = {}
+        self._output_types = {}
+
+    def enable_output_type(self: 'OutputController',
+                           output_type: 'OutputConfig',
+                           handler: OUTPUT_TYPE_HANDLER = print) -> None:
+        """
+        Register an output type to allow its output to be processed.
+
+        When any data is submitted for output that is associated with the
+        given output type, it will by default be printed to the console.
+        If a handler is provided through the optional second argument,
+        this handler will be invoked instead.
+
+        Once an output type is enabled, it cannot be disabled. However, its
+        handler can be changed by calling enable_output_type again with a
+        different handler.
+
+        :param output_type:
+            The type of output being registered
+        :param handler:
+            A function that will be called on any output of that type
+        """
+        self._output_types[output_type] = handler
+
+    def record_output(self: 'OutputController',
+                      output_type: 'OutputConfig',
+                      data: object) -> None:
+        """
+        Submit data for output, associated with one type of output as
+        described by an OutputConfig subclass. The output will be ignored
+        if the output type is not registered with this instance.
+
+        If the output type is registered with this instance, its handler
+        function will be executed, taking this model run's title as its
+        first argument, and the data as its second argument.
+
+        :param output_type:
+            The type of output the data is associated with
+        :param data:
+            Data to be output
+        """
+        if output_type in self._output_types:
+            handler = self._output_types[output_type]
+            handler(self._title, data)
