@@ -83,8 +83,7 @@ class ModelImageRenderer:
                              "of length 2 (is length {})"
                              .format(len(min_max_grades)))
         # Create an empty world map in equirectangular projection.
-        map = Basemap(llcrnrlat=-90, llcrnrlon=-180,
-                      urcrnrlat=90, urcrnrlon=180)
+        map = Basemap(projection='robin', lon_0=0)
         map.drawcoastlines(linewidth=self._continent_linewidth)
 
         # Construct a grid from the horizontal and vertical sizes of the cells.
@@ -94,14 +93,16 @@ class ModelImageRenderer:
 
         map.drawparallels(lats, linewidth=self._lat_long_linewidth)
         map.drawmeridians(lons, linewidth=self._lat_long_linewidth)
-        x, y = map(lons, lats)
+        lon,lat = np.meshgrid(lons,lats)
+        x, y = map(lon, lat)
 
         # Overlap the gridded data on top of the map, and display a colour
         # legend with the appropriate boundaries.
         img = map.pcolormesh(x, y, self._data.extract_datapoint('delta_t'),
-                             cmap=plt.cm.get_cmap("jet"))
-        map.colorbar(img)
+                             cmap=plt.cm.get_cmap("hot_r"))
+        map.colorbar()
         plt.clim(min_max_grades[0], min_max_grades[1])
+        plt.title('Change in Temperature for Doubled CO2 (\xb0C)')
         # Save the image and clear added components from memory
         plt.savefig(out_path)
         plt.close()
@@ -202,4 +203,4 @@ class ModelOutput:
             # Produce and save the image.
             print("\tSaving image...")
             g = ModelImageRenderer(self._data[i])
-            g.save_image(img_path, (-8, 8))
+            g.save_image(img_path, (-2, 8))
