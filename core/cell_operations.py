@@ -1,8 +1,4 @@
-from typing import Tuple, Callable
-
-
-# Type aliases
-WeightFunc = Callable[[float, float, float], Tuple[float, float]]
+from data.configuration import WeightFunc
 
 
 # Constants for absolute humidity calculations
@@ -63,20 +59,11 @@ MEAN_PATH = {
 }
 
 
-def weight_by_closest(lower_val: float,
-                      upper_val: float,
-                      desired: float) -> Tuple[float, float]:
-    if upper_val - desired < desired - lower_val:
-        return 0, 1
-    else:
-        return 1, 0
-
-
 def calculate_transparency(co2: float,
                            temperature: float,
                            relative_humidity: float,
-                           co2_weight_func: WeightFunc = weight_by_closest,
-                           h2o_weight_func: WeightFunc = weight_by_closest) -> float:
+                           co2_weight_func: WeightFunc,
+                           h2o_weight_func: WeightFunc) -> float:
     """
     Calculate the transparency for a grid cell with the given data.
 
