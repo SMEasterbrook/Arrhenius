@@ -9,12 +9,26 @@ from data.grid import convert_grid_format,\
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
+
 import numpy as np
 
 
 OUTPUT_FULL_PATH = path.join(Path('.').absolute(), OUTPUT_REL_PATH)
 
+class MidpointNormalize(Normalize):
+    """
+    class to help renormalize the color scale
+    """
+    def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
+        self.midpoint = midpoint
+        Normalize.__init__(self, vmin, vmax, clip)
 
+    def __call__(self, value, clip=None):
+        result, is_scalar = self.process_value(value)
+        x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
+        return np.ma.array(np.interp(value, x, y), mask=result.mask, copy=False)
+    
 class ModelImageRenderer:
     """
     A converter between gridded climate data and image visualizations of the
@@ -98,8 +112,10 @@ class ModelImageRenderer:
 
         # Overlap the gridded data on top of the map, and display a colour
         # legend with the appropriate boundaries.
+        normed=MidpointNormalize(vmin=min_max_grades[0], vmax=min_max_grades[1], midpoint=0)
         img = map.pcolormesh(x, y, self._data.extract_datapoint('delta_t'),
-                             cmap=plt.cm.get_cmap("hot_r"))
+                             norm=normed,
+                             cmap=plt.cm.get_cmap("RdYlBu_r"))
         map.colorbar()
         plt.clim(min_max_grades[0], min_max_grades[1])
         plt.title('Change in Temperature for Doubled CO2 (\xb0C)')
