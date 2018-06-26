@@ -22,8 +22,7 @@ class ModelImageRenderer:
     on a world map projection.
     """
     def __init__(self: 'ModelImageRenderer',
-                 data: 'LatLongGrid',
-                 grid: Tuple[int, int] = (1, 1)) -> None:
+                 data: 'LatLongGrid') -> None:
         """
         Instantiate a new ModelImageReader.
 
@@ -46,7 +45,7 @@ class ModelImageRenderer:
             The latitude and longitude widths of a cell in the data's grid
         """
         self._data = data
-        self._grid = grid
+        self._grid = data.dimensions()
 
         # Some parameters for the visualization are also left as attributes.
         self._continent_linewidth = 0.5
@@ -89,8 +88,9 @@ class ModelImageRenderer:
         map.drawcoastlines(linewidth=self._continent_linewidth)
 
         # Construct a grid from the horizontal and vertical sizes of the cells.
-        lats = list(range(-90, 91, self._grid[0]))
-        lons = list(range(-180, 181, self._grid[1]))
+        grid_by_width = self._grid.dims_by_width()
+        lats = list(range(-90, 91, grid_by_width[0]))
+        lons = list(range(-180, 181, grid_by_width[1]))
 
         map.drawparallels(lats, linewidth=self._lat_long_linewidth)
         map.drawmeridians(lons, linewidth=self._lat_long_linewidth)
@@ -123,17 +123,13 @@ class ModelOutput:
 
     def __init__(self: 'ModelOutput',
                  title: str,
-                 data: List['LatLongGrid'],
-                 data_grid: Tuple[int, int] = (10, 20)) -> None:
+                 data: List['LatLongGrid']) -> None:
         """
         Instantiate a new ModelOutput object.
 
         Model data is provided through the data parameter, through a list of
         grid objects. Each grid in the list represents a segment of time, such
-        as a month or a season.
-
-        data_grid must be a tuple of two numbers which represent the width of
-        each grid cell in degrees latitude and longitude, respectively.
+        as a month or a season. All grids must have the same dimensions.
 
         Finally, the title parameter gives the name of the directory that
         will store output files. This directory will be located within a
@@ -146,10 +142,7 @@ class ModelOutput:
             The base name of the output files, and of the directory that will
             store them
         :param data:
-            An array-like structure of numeric values, representing temperature
-            over a globe
-        :param data_grid:
-            The latitude and longitude widths of a cell in the data's grid
+            A list of latitude-longitude grids of data
         """
         # Create output directory if it does not already exist.
         parent_out_dir = Path(OUTPUT_FULL_PATH)
@@ -157,7 +150,7 @@ class ModelOutput:
 
         self._title = title
         self._data = data
-        self._grid = data_grid
+        self._grid = data[0].dimensions()
 
     def write_output(self: 'ModelOutput') -> None:
         """
@@ -177,7 +170,8 @@ class ModelOutput:
         file_ext = '.png'
 
         # Write the data out to a NetCDF file in the output directory.
-        grid_by_count = convert_grid_format(self._grid)
+        grid_by_count = self._grid.dims_by_count()
+        grid_by_width = self._grid.dims_by_width()
         all_dims = ['time', 'latitude', 'longitude']
 
         print("Writing NetCDF dataset...")
@@ -192,7 +186,7 @@ class ModelOutput:
                                 "Average surface temperature across the {}x{}"
                                 "degree latitude/longitude cell centered"
                                 "at these latitude and longitude coordinates"
-                                .format(self._grid[0], self._grid[1]))\
+                                .format(grid_by_width[0], grid_by_width[1]))\
             .variable_attribute("temp", "units", "Degrees Celsius")\
             .data('temp', extract_multidimensional_grid_variable(self._data,
                                                                  'temperature',
@@ -207,5 +201,5 @@ class ModelOutput:
 
             # Produce and save the image.
             print("\tSaving image...")
-            g = ModelImageRenderer(self._data[i], grid=self._grid)
-            g.save_image(img_path)
+            g = ModelImageRenderer(self._data[i])
+            g.save_image(img_path, (-8, 8))
