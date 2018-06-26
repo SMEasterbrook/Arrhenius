@@ -82,7 +82,7 @@ def calibrate_constant(temperature, albedo, transparency) -> float:
     """
     return pow(temperature, 4) * (1 + albedo * transparency)
 
-
+  
 def get_new_temperature(albedo: float,
                         new_transparency: float,
                         k: float) -> float:
@@ -100,6 +100,7 @@ def get_new_temperature(albedo: float,
         The change in temperature for a grid cell with the given change in B
     """
     denominator = 1 + albedo * new_transparency
+
     return pow((k / denominator), 1 / 4)
 
 
@@ -115,3 +116,17 @@ if __name__ == '__main__':
 
     writer = ModelOutput("arrhenius_x2", grid_cells)
     writer.write_output()
+    grid_number = 1
+    result = ""
+    for grid in grid_cells:
+        result = result + "===== Grid " + str(grid_number) + " ===== \n"
+        for latitude in grid:
+            avg_temp_change = 0
+            count = 0
+            for cell in latitude:
+                avg_temp_change += cell.get_temperature_change()
+                count += 1
+            avg_temp_change = avg_temp_change / count
+            result = result + "\t\t" + str(latitude[0].get_latitude()) \
+                     + ": " + str(avg_temp_change) + " degrees Celcius \n"
+    print(result)
