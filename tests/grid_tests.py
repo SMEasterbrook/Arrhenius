@@ -1,5 +1,6 @@
 import unittest
-from data.grid import GridDimensions, GridCell, LatLongGrid
+from data.grid import GridDimensions, GridCell, LatLongGrid,\
+    extract_multidimensional_grid_variable
 
 
 class GridDimensionsTest(unittest.TestCase):
@@ -384,3 +385,329 @@ class GridCellTest(unittest.TestCase):
             cell.set_relative_humidity(100.1)
 
         self.assertEqual(cell.get_relative_humidity(), 65)
+
+
+class GridObjectTest(unittest.TestCase):
+    """
+    A test class for LatLongGrid. Ensures correct ordering of dimensions,
+    catching of invalid input, return format, iteration, and more.
+    """
+
+    def test_valid_init_small(self):
+        """
+        Test error-free creation of a two-dimensional grid from an appropriate
+        list of grid cells.
+        """
+        cells = [[GridCell(1, 1, 0.1)]]
+
+        grid = LatLongGrid(cells)
+        dims = grid.dimensions().dims_by_count()
+        dims_expected = (1, 1)
+
+        self.assertEqual(dims, dims_expected)
+
+    def test_dimensions_small(self):
+        """
+        Test correct grid dimensions as returned by a grid's dimensions()
+        method for various small grids.
+        """
+        cells = [[GridCell(1, 1, 0.1), GridCell(2, 2, 0.2)],
+                 [GridCell(3, 3, 0.3), GridCell(4, 4, 0.4)]]
+
+        # 2x2 grid example.
+        grid = LatLongGrid(cells)
+        dims = grid.dimensions().dims_by_count()
+        dims_expected = (2, 2)
+        self.assertEqual(dims, dims_expected)
+
+        # Reduced grid example, with 1 dimension in latitude.
+        grid = LatLongGrid(cells[1:])
+        dims = grid.dimensions().dims_by_count()
+        dims_expected = (1, 2)
+        self.assertEqual(dims, dims_expected)
+
+        # Reduced grid example, with 1 dimension in longitude.
+        grid = LatLongGrid([[cells[0][0]], [cells[1][0]]])
+        dims = grid.dimensions().dims_by_count()
+        dims_expected = (2, 1)
+        self.assertEqual(dims, dims_expected)
+
+    def test_dimensions_large(self):
+        """
+        Test correct grid dimensions as returned by the grid dimensions()
+        method for one larger grid.
+        """
+        cells = []
+        lat, lon = (172, 269)
+
+        for i in range(lat):
+            row = []
+            for j in range(lon):
+                row.append(GridCell(1, 1, 1))
+            cells.append(row)
+
+        grid = LatLongGrid(cells)
+        dims = grid.dimensions().dims_by_count()
+        dims_expected = (lat, lon)
+        self.assertEqual(dims, dims_expected)
+
+    def test_get_coords_small(self):
+        """
+        Test that the grid get_coord method returns the grid cell instance at
+        the requested coordinates, relative to the appropriate points.
+        """
+        cell_00 = GridCell(1, 1, 0.1)
+        cell_01 = GridCell(2, 2, 0.2)
+        cell_10 = GridCell(3, 3, 0.3)
+        cell_11 = GridCell(4, 4, 0.4)
+
+        cells = [[cell_00, cell_01],
+                 [cell_10, cell_11]]
+
+        grid = LatLongGrid(cells)
+        cell_at_00 = grid.get_coord(0, 0)
+        cell_at_01 = grid.get_coord(0, 1)
+        cell_at_10 = grid.get_coord(1, 0)
+        cell_at_11 = grid.get_coord(1, 1)
+
+        self.assertEqual(cell_at_00, cell_00)
+        self.assertEqual(cell_at_01, cell_01)
+        self.assertEqual(cell_at_10, cell_10)
+        self.assertEqual(cell_at_11, cell_11)
+
+    def test_get_cell_out_of_bounds_error(self):
+        """
+        Test that the grid get_coords method raises errors when any indices
+        are given that are outside of the bounds of the arrays.
+        """
+        cell_00 = GridCell(1, 1, 0.1)
+        cell_01 = GridCell(2, 2, 0.2)
+        cell_10 = GridCell(3, 3, 0.3)
+        cell_11 = GridCell(4, 4, 0.4)
+
+        cells = [[cell_00, cell_01],
+                 [cell_10, cell_11]]
+
+        grid = LatLongGrid(cells)
+
+        with self.assertRaises(IndexError):
+            grid.get_coord(-1, 0)
+        with self.assertRaises(IndexError):
+            grid.get_coord(0, -1)
+        with self.assertRaises(IndexError):
+            grid.get_coord(1, 2)
+        with self.assertRaises(IndexError):
+            grid.get_coord(2, 0)
+
+    def test_set_coord_valid(self):
+        """
+        Test that the grid set_coord method uses coordinates that are
+        consistent with get_coords, and that it updates the grid in the
+        appropriate manner.
+        """
+        cell_00 = GridCell(1, 1, 0.1)
+        cell_01 = GridCell(2, 2, 0.2)
+        cell_10 = GridCell(3, 3, 0.3)
+        cell_11 = GridCell(4, 4, 0.4)
+
+        cell_00_new = GridCell(5, 5, 0.5)
+        cell_10_new = GridCell(6, 6, 0.6)
+
+        cells = [[cell_00, cell_01],
+                 [cell_10, cell_11]]
+
+        grid = LatLongGrid(cells)
+        grid.set_coord(0, 0, cell_00_new)
+        grid.set_coord(1, 0, cell_10_new)
+
+        cell_at_00 = grid.get_coord(0, 0)
+        cell_at_01 = grid.get_coord(0, 1)
+        cell_at_10 = grid.get_coord(1, 0)
+        cell_at_11 = grid.get_coord(1, 1)
+
+        self.assertEqual(cell_at_00, cell_00_new)
+        self.assertEqual(cell_at_01, cell_01)
+        self.assertEqual(cell_at_10, cell_10_new)
+        self.assertEqual(cell_at_11, cell_11)
+
+    def test_iteration_order(self):
+        """
+        Test that iteration through a grid returns all grid cells and proceeds
+        in left-to-right, top-to-bottom order.
+        """
+        cell_00 = GridCell(1, 1, 0.1)
+        cell_01 = GridCell(2, 2, 0.2)
+        cell_10 = GridCell(3, 3, 0.3)
+        cell_11 = GridCell(4, 4, 0.4)
+
+        cells = [[cell_00, cell_01],
+                 [cell_10, cell_11]]
+
+        grid = LatLongGrid(cells)
+        iter_order = [cell for cell in grid]
+        expected_iter_order = [cell_00, cell_01, cell_10, cell_11]
+
+        self.assertEqual(iter_order, expected_iter_order)
+
+    def test_extract_temperature(self):
+        """
+        Test that extracting temperature data from a grid returns an array
+        structure of the right dimensions, containing the right temperature
+        data in the right order.
+        """
+        cell_00 = GridCell(1, 2, 0.1)
+        cell_01 = GridCell(2, 4, 0.2)
+        cell_10 = GridCell(3, 6, 0.3)
+        cell_11 = GridCell(4, 8, 0.4)
+
+        cells = [[cell_00, cell_01],
+                 [cell_10, cell_11]]
+
+        grid = LatLongGrid(cells)
+        temp_data = grid.extract_datapoint("temperature")
+        expected_temp_data = [[1, 2],
+                              [3, 4]]
+
+        self.assertEqual(len(temp_data), 2)
+        self.assertEqual(len(temp_data[0]), 2)
+
+        # Loop for comparison, because extract_datapoint may return its data
+        # in a non-list format such as an array.
+        for i in range(len(cells)):
+            for j in range(len(cells[0])):
+                self.assertEqual(temp_data[i][j],
+                                 expected_temp_data[i][j])
+
+    def test_extract_temperature_change(self):
+        """
+        Test that extracting temperature change data from a grid returns an
+        array structure of the right dimensions, containing the right delta
+        temperature data in the right order.
+        """
+        cell_00 = GridCell(1, 2, 0.1)
+        cell_01 = GridCell(2, 4, 0.2)
+        cell_10 = GridCell(3, 6, 0.3)
+        cell_11 = GridCell(4, 8, 0.4)
+
+        cell_01.set_temperature(2.5)
+        cell_10.set_temperature(4)
+        cell_11.set_temperature(5.5)
+
+        cells = [[cell_00, cell_01],
+                 [cell_10, cell_11]]
+
+        grid = LatLongGrid(cells)
+        delta_temp_data = grid.extract_datapoint("delta_t")
+        expected_delta_temp_data = [[0, 0.5],
+                              [1, 1.5]]
+
+        self.assertEqual(len(delta_temp_data), 2)
+        self.assertEqual(len(delta_temp_data[0]), 2)
+
+        # Loop for comparison, because extract_datapoint may return its data
+        # in a non-list format such as an array.
+        for i in range(len(cells)):
+            for j in range(len(cells[0])):
+                self.assertEqual(delta_temp_data[i][j],
+                                 expected_delta_temp_data[i][j])
+
+    def test_extract_humidity(self):
+        """
+        Test that extracting relative humidity data from a grid returns an
+        array structure of the right dimensions, containing the expected
+        humidity data in the right order.
+        """
+        cell_00 = GridCell(1, 2, 0.1)
+        cell_01 = GridCell(2, 4, 0.2)
+        cell_10 = GridCell(3, 6, 0.3)
+        cell_11 = GridCell(4, 8, 0.4)
+
+        cells = [[cell_00, cell_01],
+                 [cell_10, cell_11]]
+
+        grid = LatLongGrid(cells)
+        humidity_data = grid.extract_datapoint("humidity")
+        expected_humidity_data = [[2, 4],
+                                  [6, 8]]
+
+        self.assertEqual(len(humidity_data), 2)
+        self.assertEqual(len(humidity_data[0]), 2)
+
+        # Loop for comparison, because extract_datapoint may return its data
+        # in a non-list format such as an array.
+        for i in range(len(cells)):
+            for j in range(len(cells[0])):
+                self.assertEqual(humidity_data[i][j],
+                                 expected_humidity_data[i][j])
+
+    def test_extract_albedo(self):
+        """
+        Test that extracting albedo data from a grid returns an array
+        structure of the right dimensions, containing the right albedo
+        data in the right order.
+        """
+        cell_00 = GridCell(1, 2, 0.1)
+        cell_01 = GridCell(2, 4, 0.2)
+        cell_10 = GridCell(3, 6, 0.3)
+        cell_11 = GridCell(4, 8, 0.4)
+
+        cells = [[cell_00, cell_01],
+                 [cell_10, cell_11]]
+
+        grid = LatLongGrid(cells)
+        albedo_data = grid.extract_datapoint("albedo")
+        expected_albedo_data = [[0.1, 0.2],
+                                [0.3, 0.4]]
+
+        self.assertEqual(len(albedo_data), 2)
+        self.assertEqual(len(albedo_data[0]), 2)
+
+        # Loop for comparison, because extract_datapoint may return its data
+        # in a non-list format such as an array.
+        for i in range(len(cells)):
+            for j in range(len(cells[0])):
+                self.assertEqual(albedo_data[i][j],
+                                 expected_albedo_data[i][j])
+
+    def test_extract_three_dimensional_datapoint(self):
+        """
+        Test conversion of a one-level of grids into a three-dimensional
+        structure of temperature data extracted from the grid. Checks
+        correct ordering of data in the output.
+        """
+        cell_000 = GridCell(1, 2, 0.1)
+        cell_001 = GridCell(2, 4, 0.2)
+        cell_010 = GridCell(3, 6, 0.3)
+        cell_011 = GridCell(4, 8, 0.4)
+
+        cell_100 = GridCell(5, 10, 0.5)
+        cell_101 = GridCell(6, 12, 0.6)
+        cell_110 = GridCell(7, 14, 0.7)
+        cell_111 = GridCell(8, 16, 0.8)
+
+        cells0 = [[cell_000, cell_001],
+                  [cell_010, cell_011]]
+        cells1 = [[cell_100, cell_101],
+                  [cell_110, cell_111]]
+
+        grid0 = LatLongGrid(cells0)
+        grid1 = LatLongGrid(cells1)
+
+        grid0_temp_expected = [[1, 2],
+                               [3, 4]]
+        grid1_temp_expected = [[5, 6],
+                               [7, 8]]
+
+        temp_data = extract_multidimensional_grid_variable([grid0, grid1],
+                                                           "temperature")
+
+        self.assertEqual(len(temp_data), 2)
+        self.assertEqual(len(temp_data[0]), 2)
+        self.assertEqual(len(temp_data[0][0]), 2)
+
+        for i in range(len(temp_data)):
+            for j in range(len(temp_data[0])):
+                self.assertEqual(temp_data[0][i][j],
+                                 grid0_temp_expected[i][j])
+                self.assertEqual(temp_data[1][i][j],
+                                 grid1_temp_expected[i][j])
