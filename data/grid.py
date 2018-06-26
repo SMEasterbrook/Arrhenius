@@ -39,13 +39,7 @@ def convert_grid_format(grid: Tuple[int, int]) -> Tuple[int, int]:
     :return: A new set of tuple-based grid dimensions in the other format
             (see above)
     """
-    if grid is None:
-        raise ValueError("grid cannot be None")
-    elif type(grid) != tuple:
-        raise TypeError("grid must be a tuple of exactly 2 elements")
-    elif len(grid) != 2:
-        raise ValueError("grid must be a tuple of exactly 2 elements")
-    elif 180 % grid[0] != 0:
+    if 180 % grid[0] != 0:
         raise ValueError("Latitude width must be a divisor of 180")
     elif 360 % grid[1] != 0:
         raise ValueError("Longitude width must be a divisor of 360")
@@ -105,6 +99,92 @@ def extract_multidimensional_grid_variable(grids: Union[list, 'LatLongGrid'],
         return np.array(grid_values)
 
 
+class GridDimensions:
+    """
+    A representation of dimensions in a flat latitude/longitude grid.
+
+    Grid dimensions can be described in multiple ways. For example, a grid
+    can be defined by having cells that are all 1 degree latitude by 1 degree
+    longitude, or the same grid can be equivalently be described as having
+    180 cells in a latitude band and 360 cells in a longitude band. This class
+    serves as an access point and conversion medium between grid dimension
+    types.
+
+    This class is not a grid in itself, and contains no data aside from the
+    dimensions of a grid.
+    """
+    def __init__(self: 'GridDimensions',
+                 dims: Tuple[int, int],
+                 dims_form: str = "width") -> None:
+        """
+        Initialize a new set of grid dimensions based on the tuple parameter.
+
+        By default, the two elements in the tuple are interpreted width and
+        height of a grid cell in the grid, in degrees latitude and degrees
+        longitude respectively. From this, the real dimensions of the grid
+        can be found. This behaviour is also maintained if the optional second
+        parameter is included with value 'width'.
+
+        If the optional second parameter is given value 'count', then the
+        numbers in the tuple are interpreted as the number of grid cells in
+        a latitude band and a longitude band, respectively.
+
+        If the second parameter is given any value other than 'width' or
+        'count', an error will be raised.
+
+        :param dims:
+            A tuple of two numbers that indicate the size of the grid
+        :param dims_form:
+            A string describing how to interpret the grid dimensions
+        """
+        # Integrity checks for dims
+        if type(dims) != tuple:
+            raise TypeError("dims must be a tuple of exactly 2 elements"
+                            "(is type {})".format(type(dims)))
+        elif len(dims) != 2:
+            raise ValueError("dims must be a tuple of exactly 2 elements"
+                             "(is length {})".format(len(dims)))
+        elif type(dims[0]) != int:
+            raise TypeError("All elements of dims must be integers"
+                            "(element 0 is type {})".format(type(dims[0])))
+        elif type(dims[1]) != int:
+            raise TypeError("All elements of dims must be integers"
+                            "(element 1 is type {}".format(type(dims[1])))
+
+        # Integrity checks for dims_form
+        if dims_form == "width":
+            self._grid_by_count = convert_grid_format(dims)
+        elif dims_form == "count":
+            self._grid_by_count = dims
+        else:
+            raise ValueError("dims_form must be either 'width' or 'count'"
+                             "(is {})".format(dims_form))
+
+    def dims_by_width(self: 'GridDimensions') -> Tuple[int, int]:
+        """
+        Return a representation of the grid dimensions in the form of a
+        two-element tuple, where the elements represent the width and height
+        of a single cell in the grid, in degrees latitude and degrees
+        longitude respectively.
+
+        :return:
+            The grid dimensions in terms of cell sizes
+        """
+        return convert_grid_format(self._grid_by_count)
+
+    def dims_by_count(self: 'GridDimensions') -> Tuple[int, int]:
+        """
+        Return a representation of the grid dimensions in the form of a
+        two-element tuple, where the elements represent the number of cells
+        in a latitudinal band and a longitudinal band, respectively.
+
+        :return:
+            The grid dimensions in terms of number of cells required to
+            circle the globe
+        """
+        return self._grid_by_count
+
+
 class GridCell:
     """
     A single cell within a latitude-longitude grid overlaid over Planet Earth.
@@ -125,19 +205,19 @@ class GridCell:
         if they are required.
 
         Preconditions:
-            -273.0 <= temp
+            0 <= temp
             0.0 <= r_hum <= 100.0
             0.0 <= albedo <= 1.0
 
         :param temp:
-            Average temperature, in degrees Celsius, within the grid cell
+            Average temperature, in Kelvin, within the grid cell
         :param r_hum:
             Average relative humidity within the grid cell, in percent
         :param albedo:
             Average surface albedo within the grid cell
         """
-        if temp < -273:
-            raise ValueError("Value for temperature must be greater than -273"
+        if temp < 0:
+            raise ValueError("Value for temperature must be greater than 0"
                              "(is {})".format(temp))
         elif r_hum < 0 or r_hum > 100:
             raise ValueError("Value for relative humidity must fall in"
@@ -146,7 +226,7 @@ class GridCell:
             raise ValueError("Value for albedo must fall in [0, 1] (is {})"
                              .format(albedo))
 
-        self._temperature = temp + 273.15
+        self._temperature = temp
         self._rel_humidity = r_hum
         self._albedo = albedo
 
@@ -310,37 +390,21 @@ class LatLongGrid:
             for j in range(len(row)):
                 yield row[j]
 
-    def grid_dimensions(self: 'LatLongGrid',
-                        grid_form: str = "width") -> Tuple[int, int]:
+    def dimensions(self: 'LatLongGrid') -> Union['GridDimensions', None]:
         """
-        Returns a two-element tuple containing the dimensions of the grid.
-        The first element represent latitude, and the second represents
-        longitude.
+        Returns a set of grid dimensions that matches the size of the data
+        that forms the grid.
 
-        The optional grid_form argument allows specification of the format
-        of the grid returned. If given the value 'width' (default), then each
-        number in the tuple represents the width of a single grid cell in
-        degrees; if given the value 'count', then each number in the grid
-        is how many cells it takes to circle the globe in the appropriate
-        dimension.
-
-        Returns (0, 0) if no data has been provided from which to form a grid.
+        Returns None if no data has been provided from which to form a grid.
 
         :return:
-            A tuple containing the dimensions of this grid
+            The dimensions of this instance's gridded data
         """
         if self._data is None:
-            return 0, 0
+            return None
         else:
             grid_by_count = (len(self._data), len(self._data[0]))
-
-            if grid_form == "width":
-                return convert_grid_format(grid_by_count)
-            elif grid_form == "count":
-                return grid_by_count
-            else:
-                raise ValueError("Grid form must be either 'width' or 'count'"
-                                 "(is {})".format(grid_form))
+            return GridDimensions(grid_by_count, "count")
 
     def set_coord(self: 'LatLongGrid',
                   x: int,
