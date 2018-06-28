@@ -1,12 +1,12 @@
 from enum import Enum, auto
-from typing import Tuple, Dict, Callable, Optional
+from typing import List, Tuple, Dict, Callable, Optional
 
 from data.configuration import Config
 
 
 # Type aliases
 OutputTypeHandler = Callable[[str, object], None]
-CollectionHandler = Callable[[str, Config, object]]
+CollectionHandler = Callable[[str, Config, object], None]
 
 
 class OutputConfig(Enum):
@@ -281,8 +281,13 @@ class OutputController:
             Data to be output
         """
         collection = self._navigate_collection_path(collection_path)
-        handler = collection[COLLECTION_HANDLERS]
-        handler(self._title, collection, data)
+
+        if COLLECTION_HANDLERS in collection:
+            handler = collection[COLLECTION_HANDLERS]
+            handler(self._title, collection, data)
+        else:
+            raise LookupError("No handler function loaded for collection"
+                              "{}".format(collection_path))
 
 
 # Standard collection names.

@@ -3,8 +3,7 @@ from typing import List, Tuple
 
 from data.resources import OUTPUT_REL_PATH
 from data.writer import NetCDFWriter
-from data.grid import convert_grid_format,\
-    extract_multidimensional_grid_variable
+from data.grid import extract_multidimensional_grid_variable
 
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap
@@ -89,8 +88,18 @@ class ModelImageRenderer:
 
         # Construct a grid from the horizontal and vertical sizes of the cells.
         grid_by_width = self._grid.dims_by_width()
-        lats = list(range(-90, 91, grid_by_width[0]))
-        lons = list(range(-180, 181, grid_by_width[1]))
+
+        lat_val = -90.0 + (grid_by_width[0] / 2)
+        lats = []
+        while lat_val < 90:
+            lats.append(lat_val)
+            lat_val += grid_by_width[0]
+
+        lon_val = -180.0 + (grid_by_width[1] / 2)
+        lons = []
+        while lon_val < 180:
+            lons.append(lon_val)
+            lon_val += grid_by_width[1]
 
         map.drawparallels(lats, linewidth=self._lat_long_linewidth)
         map.drawmeridians(lons, linewidth=self._lat_long_linewidth)
@@ -178,9 +187,9 @@ class ModelOutput:
         nc_writer = NetCDFWriter()\
             .global_attribute("description", "Output for an Arrhenius model"
                                              "run" + self._title + ".")\
-            .dimension('time', np.int32, len(self._data))\
-            .dimension('latitude', np.int32, grid_by_count[0])\
-            .dimension('longitude', np.int32, grid_by_count[1])\
+            .dimension('time', np.int32, len(self._data), (0, len(self._data)))\
+            .dimension('latitude', np.int32, grid_by_count[0], (-90, 90))\
+            .dimension('longitude', np.int32, grid_by_count[1], (-180, 180))\
             .variable('temp', np.float32, all_dims)\
             .variable_attribute("temp", "description",
                                 "Average surface temperature across the {}x{}"

@@ -1,10 +1,11 @@
 from netCDF4 import Dataset
-from typing import List, Union
+from typing import List, Tuple, Union
 from numpy import ndarray
 
 
 DIM_TYPE_KEY = 'type'
 DIM_SIZE_KEY = 'size'
+DIM_BOUNDS_KEY = 'bounds'
 
 VAR_TYPE_KEY = 'type'
 VAR_DIMS_KEY = 'dims'
@@ -68,7 +69,8 @@ class NetCDFWriter:
     def dimension(self: 'NetCDFWriter',
                   dim_name: str,
                   dim_type: type,
-                  dim_size: Union[int, None]) -> 'NetCDFWriter':
+                  dim_size: Union[int, None],
+                  dim_bounds: Tuple[int, int] = (-180, 180)) -> 'NetCDFWriter':
         """
         Adds a new variable dimension to the end of the current list
         of dimensions.
@@ -114,7 +116,8 @@ class NetCDFWriter:
 
         self._dimensions[dim_name] = {
             DIM_TYPE_KEY: dim_type,
-            DIM_SIZE_KEY: dim_size
+            DIM_SIZE_KEY: dim_size,
+            DIM_BOUNDS_KEY: dim_bounds
         }
 
         return self
@@ -292,13 +295,6 @@ class NetCDFWriter:
         :param format:
             The file format for the NetCDF file (defaults to NetCDF4)
         """
-        if len(self._data) == 0:
-            raise ValueError("No data has been submitted to be written")
-        elif len(self._dimensions) == 0:
-            raise ValueError("No data dimensions have been registered")
-        elif len(self._variables) == 0:
-            raise ValueError("No variables have been registered")
-
         for variable in self._variables:
             if variable not in self._data:
                 raise LookupError("No data has been submitted for variable"
@@ -317,7 +313,19 @@ class NetCDFWriter:
             dim_size = self._dimensions[dim_name][DIM_SIZE_KEY]
 
             output_dataset.createDimension(dim_name, dim_size)
-            output_dataset.createVariable(dim_name, dim_type, (dim_name,))
+            dim_var = output_dataset.createVariable(dim_name, dim_type,
+                                                    (dim_name,))
+
+            if dim_size is not None:
+                dim_bounds = self._dimensions[dim_name][DIM_BOUNDS_KEY]
+
+                lower_bound = dim_bounds[0]
+                upper_bound = dim_bounds[1]
+                dim_range = upper_bound - lower_bound
+                cell_width = dim_range / dim_size
+
+                dim_var[:] = [cell_width * i + lower_bound + (cell_width / 2)
+                              for i in range(dim_size)]
 
         for var_name in self._variables:
             var_type = self._variables[var_name][VAR_TYPE_KEY]
