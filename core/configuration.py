@@ -1,6 +1,7 @@
 from typing import Tuple, Dict, Callable
 
 import json
+from jsonschema import validate
 
 from data.provider import PROVIDERS
 
@@ -174,12 +175,11 @@ _transparency_weight_converter: Dict[str, WeightFunc] = {
 }
 
 
-def get_transparency_weight_func(name: str) -> WeightFunc:
-    return _transparency_weight_converter[name]
-
-
 # Preloaded configuration files.
 JSON_DEFAULT = "../core/default_config.json"
+JSON_SCHEMA_FILE = "../core/config_schema.json"
+
+json_schema = json.loads(open(JSON_SCHEMA_FILE, "r").read())
 
 
 def from_json_string(json_data: str) -> Config:
@@ -196,6 +196,7 @@ def from_json_string(json_data: str) -> Config:
         A configuration object based on the JSON data
     """
     options = json.loads(json_data)
+    validate(options, json_schema)
 
     # For data providers, replace strings that identify functions with the
     # functions themselves.

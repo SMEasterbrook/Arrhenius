@@ -1,0 +1,60 @@
+{
+    "title": "Arrhenius model configuration",
+    "description": "Configuration settings for a run of The Arrhenius Project's climate model",
+
+    "type": "object",
+    "properties": {
+        "year": {
+            "type": "integer"
+        },
+        "num_layers": {
+            "type": "integer",
+	    "minimum": 1
+        },
+        "num_iters": {
+            "type": "integer",
+	    "minimum": 1
+        },
+        "aggregate_lat": {
+            "type": [
+                "string",
+                "null"
+            ],
+	    "enum": ["before", "after", null]
+        },
+	"aggregate_level": {
+            "enum": ["before", "after", null]
+        },
+        "temp_src": {
+            "type": "string"
+        },
+        "humidity_src": {
+            "type": "string"
+        },
+        "albedo_src": {
+            "type": "string"
+        },
+        "absorbance_src": {
+            "type": "string"
+        },
+        "CO2_weight": {
+            "type": "string",
+	    "enum": ["closest", "low", "high", "mean"]
+        },
+        "H2O_weight": {
+            "type": "string",
+	    "enum": ["closest", "low", "high", "mean"]
+        }
+    },
+
+    "required": [
+	    "year",
+	    "num_layers",
+	    "num_iters",
+	    "aggregate_lat",
+	    "temp_src",
+	    "humidity_src",
+	    "albedo_src",
+	    "absorbance_src"
+    ]
+}
