@@ -89,15 +89,15 @@ class ModelImageRenderer:
         # Construct a grid from the horizontal and vertical sizes of the cells.
         grid_by_width = self._grid.dims_by_width()
 
-        lat_val = -90.0 + (grid_by_width[0] / 2)
+        lat_val = -90.0
         lats = []
-        while lat_val < 90:
+        while lat_val <= 90:
             lats.append(lat_val)
             lat_val += grid_by_width[0]
 
-        lon_val = -180.0 + (grid_by_width[1] / 2)
+        lon_val = -180.0
         lons = []
-        while lon_val < 180:
+        while lon_val <= 180:
             lons.append(lon_val)
             lon_val += grid_by_width[1]
 

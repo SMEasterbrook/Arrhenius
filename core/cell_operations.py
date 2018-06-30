@@ -1,4 +1,4 @@
-from data.configuration import WeightFunc
+from core.configuration import WeightFunc
 
 
 # Constants for absolute humidity calculations

@@ -4,8 +4,7 @@ from data.grid import GridDimensions
 from data.collector import ClimateDataCollector
 from data.display import ModelOutput
 
-import data.provider as pr
-import data.configuration as cnf
+import core.configuration as cnf
 
 from typing import List, Dict
 
@@ -13,7 +12,7 @@ from typing import List, Dict
 def run_model(init_co2: float,
               new_co2: float,
               grids: List['LatLongGrid'],
-              config: Dict[str, object] = cnf.DEFAULT_CONFIG) -> None:
+              config: Dict[str, object] = cnf.default_config()) -> None:
     """
     Calculate Earth's surface temperature change due to
     a change in CO2 levels.
@@ -54,8 +53,8 @@ def calculate_cell_temperature(init_co2: float,
         The change in surface temperature for the provided grid cell
         after the given change in CO2
     """
-    co2_weight_func = cnf.get_transparency_weight_func(config[cnf.CO2_WEIGHT])
-    h2o_weight_func = cnf.get_transparency_weight_func(config[cnf.H2O_WEIGHT])
+    co2_weight_func = config[cnf.CO2_WEIGHT]
+    h2o_weight_func = config[cnf.H2O_WEIGHT]
 
     init_temperature = grid_cell.get_temperature()
     relative_humidity = grid_cell.get_relative_humidity()
@@ -121,16 +120,17 @@ def get_new_temperature(albedo: float,
 
 
 if __name__ == '__main__':
-    grid_dims = GridDimensions((10, 20))
-    grid_cells = ClimateDataCollector(grid_dims) \
-        .use_temperature_source(pr.arrhenius_temperature_data) \
-        .use_humidity_source(pr.arrhenius_humidity_data) \
-        .use_albedo_source(pr.landmask_albedo_data) \
-        .get_gridded_data()
-
-    conf = cnf.DEFAULT_CONFIG
+    conf = cnf.default_config()
     conf[cnf.CO2_WEIGHT] = cnf.WEIGHT_BY_PROXIMITY
     conf[cnf.H2O_WEIGHT] = cnf.WEIGHT_BY_PROXIMITY
+
+    grid = GridDimensions((10, 20))
+    grid_cells = ClimateDataCollector(grid)\
+        .use_temperature_source(conf[cnf.TEMP_SRC])\
+        .use_humidity_source(conf[cnf.HUMIDITY_SRC])\
+        .use_albedo_source(conf[cnf.ALBEDO_SRC])\
+        .get_gridded_data()
+
     run_model(1, 2, grid_cells)
 
     writer = ModelOutput("arrhenius_x2", grid_cells)
