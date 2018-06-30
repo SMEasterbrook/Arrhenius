@@ -1,7 +1,7 @@
 from enum import Enum, auto
-from typing import List, Tuple, Dict, Callable, Optional
+from typing import Tuple, Dict, Callable, Optional
 
-from data.configuration import Config
+from core.configuration import Config
 
 
 # Type aliases
