@@ -1,5 +1,8 @@
 from typing import Tuple, Dict, Callable
 
+import json
+
+from data.provider import PROVIDERS
 
 # Type aliases
 Config = Dict[str, object]
@@ -173,6 +176,37 @@ _transparency_weight_converter: Dict[str, WeightFunc] = {
 
 def get_transparency_weight_func(name: str) -> WeightFunc:
     return _transparency_weight_converter[name]
+
+
+def from_json_string(json_data: str) -> Config:
+    """
+    Produce a configuration object from a string containing JSON-formatted
+    data. Any strings that are used to identify functions are replaced by
+    the appropriate functions.
+
+    See specifications for input dictionary under configuration.py.
+
+    :param json_data:
+        A JSON string containing a configuration dictionary
+    :return:
+        A configuration object based on the JSON data
+    """
+    options = json.loads(json_data)
+
+    # For data providers, replace strings that identify functions with the
+    # functions themselves.
+    options[TEMP_SRC] = PROVIDERS['temperature'][options[TEMP_SRC]]
+    options[HUMIDITY_SRC] = PROVIDERS['humidity'][options[HUMIDITY_SRC]]
+    options[ALBEDO_SRC] = PROVIDERS['albedo'][options[ALBEDO_SRC]]
+
+    # Replace string identifying transparency-weighting functions with the
+    # functions themselves.
+    for trans_weight_option in ['CO2_weight', 'H2O_weight']:
+        if trans_weight_option in options:
+            options[trans_weight_option] = \
+                _transparency_weight_converter[options[trans_weight_option]]
+
+    return options
 
 
 DEFAULT_CONFIG: Config = {
