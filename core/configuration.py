@@ -2,6 +2,7 @@ from typing import Tuple, Dict, Callable
 
 import json
 from jsonschema import validate
+import xml.etree.ElementTree as ETree
 
 from data.provider import PROVIDERS
 
@@ -198,20 +199,60 @@ def from_json_string(json_data: str) -> Config:
     options = json.loads(json_data)
     validate(options, json_schema)
 
+    return from_dict(options)
+
+
+def from_xml_string(xml_data: str) -> Config:
+    """
+    Produce a configuration object from a string containing XML-formatted
+    data. Any strings that are used to identify functions are replaced by
+    the appropriate functions.
+
+    See specifications for input dictionary under configuration.py.
+
+    :param xml_data:
+        An XML string containing a configuration dictionary
+    :return:
+        A configuration object based on the XML data
+    """
+    xml_tree = ETree.fromstring(xml_data)
+    options = {child.tag: child.data.strip() for child in xml_tree}
+
+    return from_dict(options)
+
+
+def from_dict(options: Dict[str, str]) -> Config:
+    """
+    Returns a proper config object based on the config options dictionary,
+    by replacing string identifiers with the objects they identify. The
+    original dictionary is not modified in the process.
+
+    For example, data provider functions are identified by string names in
+    an original configuration input. These names are converted into the
+    appropriate function objects in the final configuration object.
+
+    :param options:
+        A dictionary of configuration objects
+    :return:
+        A configuration object based on the dictionary, with some strings
+        being replaced with non-serializable objects they identify.
+    """
+    config = {k: v for k, v in options.items()}
+
     # For data providers, replace strings that identify functions with the
     # functions themselves.
-    options[TEMP_SRC] = PROVIDERS['temperature'][options[TEMP_SRC]]
-    options[HUMIDITY_SRC] = PROVIDERS['humidity'][options[HUMIDITY_SRC]]
-    options[ALBEDO_SRC] = PROVIDERS['albedo'][options[ALBEDO_SRC]]
+    config[TEMP_SRC] = PROVIDERS['temperature'][config[TEMP_SRC]]
+    config[HUMIDITY_SRC] = PROVIDERS['humidity'][config[HUMIDITY_SRC]]
+    config[ALBEDO_SRC] = PROVIDERS['albedo'][config[ALBEDO_SRC]]
 
     # Replace string identifying transparency-weighting functions with the
     # functions themselves.
     for trans_weight_option in ['CO2_weight', 'H2O_weight']:
-        if trans_weight_option in options:
-            options[trans_weight_option] = \
-                _transparency_weight_converter[options[trans_weight_option]]
+        if trans_weight_option in config:
+            config[trans_weight_option] = \
+                _transparency_weight_converter[config[trans_weight_option]]
 
-    return options
+    return config
 
 
 def default_config() -> Config:
