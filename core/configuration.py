@@ -15,11 +15,18 @@ WEIGHT_BY_PROXIMITY = "mean"
 
 
 # Keys in configuration dictionaries.
+YEAR = "year"
 NUM_LAYERS = "layers"
 NUM_ITERS = "iters"
+AGGREGATE_LAT = "aggregate_lat"
+AGGREGATE_LEVEL = "aggregate_level"
+# Names of data providers to use.
+TEMP_SRC = "temp_src"
+HUMIDITY_SRC = "humidity_src"
+ALBEDO_SRC = "albedo_src"
+ABSORBANCE_SRC = "abs_src"
 CO2_WEIGHT = "CO2_weight"
 H2O_WEIGHT = "H2O_weight"
-AGGREGATE_LAT = "aggregate_lat"
 
 AGGREGATE_BEFORE = "before"
 AGGREGATE_AFTER = "after"
@@ -169,9 +176,15 @@ def get_transparency_weight_func(name: str) -> WeightFunc:
 
 
 DEFAULT_CONFIG: Config = {
+    YEAR: 1895,
     NUM_LAYERS: 1,
     NUM_ITERS: 1,
+    AGGREGATE_LAT: AGGREGATE_AFTER,
+    AGGREGATE_LEVEL: AGGREGATE_NONE,
+    TEMP_SRC: "arrhenius",
+    HUMIDITY_SRC: "arrhenius",
+    ALBEDO_SRC: "landmask",
+    ABSORBANCE_SRC: "table",
     CO2_WEIGHT: WEIGHT_TO_CLOSEST,
     H2O_WEIGHT: WEIGHT_TO_CLOSEST,
-    AGGREGATE_LAT: AGGREGATE_AFTER,
 }
