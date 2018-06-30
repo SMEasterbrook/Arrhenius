@@ -1,0 +1,12 @@
+{
+    "year": 1895,
+    "num_layers": 1,
+    "num_iters": 1,
+    "aggregate_lat": "after",
+    "temp_src": "arrhenius",
+    "humidity_src": "arrhenius",
+    "albedo_src": "landmask",
+    "absorbance_src": "table",
+    "CO2_weight": "mean",
+    "H2O_weight": "mean"
+}

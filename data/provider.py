@@ -419,3 +419,17 @@ def static_absorbance_data() -> float:
 
 
 REQUIRE_TEMP_DATA_INPUT = [landmask_albedo_data]
+
+PROVIDERS = {
+    "temperature": {
+        "arrhenius": arrhenius_temperature_data,
+        "berkeley": berkeley_temperature_data
+    },
+    "humidity": {
+        "arrhenius": arrhenius_humidity_data,
+        "ncar": ncar_humidity_data
+    },
+    "albedo": {
+        "landmask": landmask_albedo_data
+    }
+}

@@ -178,6 +178,10 @@ def get_transparency_weight_func(name: str) -> WeightFunc:
     return _transparency_weight_converter[name]
 
 
+# Preloaded configuration files.
+JSON_DEFAULT = "../core/default_config.json"
+
+
 def from_json_string(json_data: str) -> Config:
     """
     Produce a configuration object from a string containing JSON-formatted
@@ -209,16 +213,19 @@ def from_json_string(json_data: str) -> Config:
     return options
 
 
-DEFAULT_CONFIG: Config = {
-    YEAR: 1895,
-    NUM_LAYERS: 1,
-    NUM_ITERS: 1,
-    AGGREGATE_LAT: AGGREGATE_AFTER,
-    AGGREGATE_LEVEL: AGGREGATE_NONE,
-    TEMP_SRC: "arrhenius",
-    HUMIDITY_SRC: "arrhenius",
-    ALBEDO_SRC: "landmask",
-    ABSORBANCE_SRC: "table",
-    CO2_WEIGHT: WEIGHT_TO_CLOSEST,
-    H2O_WEIGHT: WEIGHT_TO_CLOSEST,
-}
+def default_config() -> Config:
+    """
+    Returns a set of default configuration options for running the Arrhenius
+    model. Approximates Arrhenius' original model run using his original data.
+
+    See the default_config.json file for specification.
+
+    :return:
+        Default configuration options for the Arrhenius model
+    """
+    # Recover config options from a local JSON file.
+    default_json_file = open(JSON_DEFAULT, "r")
+    default_json_str = default_json_file.read()
+    default_json_file.close()
+
+    return from_json_string(default_json_str)
