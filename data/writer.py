@@ -36,10 +36,8 @@ class NetCDFWriter:
         For example, the attribute 'description' may refer to the string
         'A dataset containing 10x20 degree gridded temperature and humidity
         data used in Arrhenius' 1895 climate model.'
-
         Preconditions:
             attr_name != ''
-
         :param attr_name:
             The name of the new global attribute
         :param attr_val:
@@ -74,11 +72,9 @@ class NetCDFWriter:
         """
         Adds a new variable dimension to the end of the current list
         of dimensions.
-
         Preconditions:
             dim_name != ''
             dim_size > 0
-
         :param dim_name:
             The name of the new dimension
         :param dim_type:
@@ -129,20 +125,16 @@ class NetCDFWriter:
         """
         Add a new variable to be written, or replace any existing variable with
         the same name.
-
         The last argument specifies all the dimensions associated with this new
         variable. Each dimension must have already been registered in this
         Writer or else a ValueError will be raised.
-
         Dimensions in the list should be in the same order as they appear in
         the variable's actual data. For example, if the first dimension in a
         variable's data array is time, then 'time' should be the first element
         in the dimensions list. It will be written to the file as such.
-
         Preconditions:
             var_name != ''
             each element of var_dims must be registered as a dimension
-
         :param var_name:
             The name of the new variable
         :param var_type:
@@ -204,11 +196,9 @@ class NetCDFWriter:
         with the variable var_name.
         For example, the attribute 'units' for variable latitude may refer to
         the string 'Degrees north of the equator.'
-
         Preconditions:
             var_name must be registered as a variable
             attr_name != ''
-
         :param var_name:
             The name of the variable to which the attribute will be associated
         :param attr_name:
@@ -251,14 +241,11 @@ class NetCDFWriter:
              data: ndarray) -> 'NetCDFWriter':
         """
         Submit a set of data that can be written to a NetCDF file.
-
         The data should be passed in as either an array or an array-like
         structure. The number of dimensions to the array should be equal
         to the number of dimensions associated with variable var_name.
-
         Precondition:
             var_name has already been registered as a variable
-
         :param data:
             A new variable worth of data to add into the NetCDF file
         :param var_name:
@@ -284,12 +271,10 @@ class NetCDFWriter:
         Use the dimensions, variables, variable data, and attributes to write a
         NetCDF file with the specified format. This file is placed in the
         output directory specified in the resources.py file.
-
         Throws an error if not all the required pieces (dimensions, data,
         variables) have been entered. These pieces are not reset after the
         function exits, and so it can be called successively with different
         file name arguments without having to reload data.
-
         :param filepath:
             An absolute or relative path to the NetCDF file to be produced
         :param format:

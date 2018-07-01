@@ -9,16 +9,13 @@ import pyresample
 This module contains prebuilt and custom data providers, functions
 that collect and format data from one of more datasets to construct a
 meaningful array of data.
-
 For instance, a provider function may access datasets on both land and
 ocean surface temperatures to produce a global surface temperature
 dataset, and do operations such as rearranging dimensions to make
 the datasets consistent.
-
 For every different data type needed, a new provider function should
 be made that is specialized to that data type and its origin.
 Additionally, stub or mock providers can be made for testing purposes.
-
 Data providers do not need to be associated with databases or
 datasets. Some may contain purely static values. These can be left
 as publicly exposed constants unless encapsulation reasons dictate
@@ -38,7 +35,6 @@ def _adjust_latlong_grid(data_var: np.ndarray,
     """
     Translate a latitude-longitude variable from its native grid to the
     specified grid dimensions.
-
     :param data_var:
         The dataset variable that is to be regridded
     :param grid:
@@ -77,19 +73,15 @@ def _regrid_netcdf_variable(data_var: np.ndarray,
                             dim_count: int = 2) -> np.ndarray:
     """
     Translate a variable from its native grid to a requested grid dimensions.
-
     A variable may contain more dimensions that latitude or longitude, and
     may also contain level or time dimensions, for instance. If any such
     extra dimensions are present, specify how many total dimensions there are
     in the dim_count parameter to identify at what level the latitude/longitude
     data is found.
-
     If the grid is None, then no action will be taken and the original
     data will be returned.
-
     Precondition:
         dim_count >= 2
-
     :param data_var:
         The dataset variable that is to be regridded
     :param grid:
@@ -121,7 +113,6 @@ def _regrid_netcdf_variable(data_var: np.ndarray,
 def _avg(data_var: np.ndarray) -> float:
     """
     Returns the average of the numeric element of the data array.
-
     :param data_var:
         An array of numeric elements
     :return:
@@ -139,12 +130,10 @@ def _naive_regrid(data_var: np.ndarray,
     """
     Regrid the given variable in the simplest way possible: by averaging the
     values in the original grid that make up a cell in the new grid.
-
     For this method to work, a single grid cell in the new grid must exactly
     fit an integer number of cells from the original grid in both latitude
     and longitude direction. That is, the width and height of a grid cell
     in the new grid must be integer multiples of those in the original grid.
-
     :param data_var:
         A set of gridded data
     :param grid:
@@ -188,19 +177,15 @@ def arrhenius_temperature_data(grid: 'GridDimensions'
     """
     A data provider returning temperature data from Arrhenius' original
     1895 dataset.
-
     Data is gridded on a 10x20 degree latitude-longitude grid, and so any
     attempts to regrid to a finer grid will produce grainy results. Data is
     divided into four time segments of each a season long, for a total of
     one year of data coverage.
-
     Not all grid cells have values, especially in the Arctic and Antarctic
     circles. These missing values are present as NaN in the array returned.
-
     The data will default to a 10x20 degree grid, but can be converted to
     other grid dimensions through the function parameter grid. Only grids
     containing integer multiples of the original grid are supported.
-
     :param grid:
         The dimensions of the grid onto which the data is to be converted
     :return:
@@ -222,16 +207,13 @@ def berkeley_temperature_data(grid: 'GridDimensions'
     temperature dataset. Includes 100% surface and ocean coverage in
     1-degree gridded format. Data is reported for the last full year,
     in monthly sections.
-
     Returned in a numpy array. First index corresponds to month, with
     0 being January and 11 being December; the second index is latitude,
     with 0 being 90 and 179 being 90; the third index is longitude,
     specifications unknown.
-
     The data will default to a 1-by-1-degree grid, but can be converted to
     other grid dimensions through the function parameter grid. Only grids
     containing integer multiples of the original grid are supported.
-
     :param grid:
         The dimensions of the grid onto which the data is to be converted
     :return:
@@ -269,19 +251,15 @@ def arrhenius_humidity_data(grid: 'GridDimensions'
     """
     A data provider returning relative humidity data from Arrhenius' original
     1895 dataset.
-
     Data is gridded on a 10x20 degree latitude-longitude grid, and so any
     attempts to regrid to a finer grid will produce grainy results. Data is
     divided into four time segments of each a season long, for a total of
     one year of data coverage.
-
     Not all grid cells have values, especially in the Arctic and Antarctic
     circles. These missing values are present as NaN in the array returned.
-
     The data will default to a 10x20 degree grid, but can be converted to
     other grid dimensions through the two function parameters. Only grids
     containing integer multiples of the original grid are supported.
-
     :param grid:
         The dimensions of the grid onto which the data will be converted
     :return:
@@ -300,16 +278,13 @@ def ncar_humidity_data(grid: 'GridDimensions'
     A data provider returning (by default) 1-degree gridded relative
     humidity data at surface level. The data will be adjusted to a new
     grid if one is provided.
-
     Data is returned as a nested list structure. The outermost list has
     12 indices, and represents months of the year. For instance, index 0
     represents January, and index 9 is October. The second index is latitude,
     and the third is longitude.
-
     The data will default to a 1-by-1-degree grid, but can be converted to
     other grid dimensions through the two function parameters. Only grids
     containing integer multiples of the original grid are supported.
-
     :param grid:
         The dimensions of the grid onto which the data will be converted
     :return:
@@ -333,21 +308,17 @@ def landmask_albedo_data(temp_data: np.ndarray,
     land has a constant albedo, and all water likewise has a constant
     albedo. In this case clouds are ignored, although they would
     contribute to lower global average albedo.
-
     Data is returned in a numpy array. The first index represents
     latitude, and the second index is longitude.
-
     Gridded temperature data is required in the first parameter in
     order to identify which cells are covered in snow. This data
     should come from a temperature provider function that has been
     passed the same grid as this function. That is, the temperature
     data should be on the same grid as the albedo data will be
     converted to.
-
     The returned albedo data will have the same time granularity as the
     temperature data it is based on (i.e. monthly value if the temperature
     is reported in monthly values).
-
     :param temp_data:
         Gridded surface temperature data, on the same grid as the data will
         be converted to
@@ -407,11 +378,9 @@ def static_absorbance_data() -> float:
     """
     A data provider that gives a single, global atmospheric heat absorbance
     value.
-
     This value is taken directly from Arrhenius' original paper, in which its
     derivation is unclear. Modern heat absorbance would have risen since
     Arrhenius' time.
-
     :return:
         Arrhenius' atmospheric absorbance coefficient
     """
