@@ -3,7 +3,9 @@ from core.cell_operations import calculate_transparency
 from data.grid import GridDimensions, LatLongGrid
 from data.collector import ClimateDataCollector
 from data.display import ModelOutput
+
 import data.provider as pr
+import data.configuration as cnf
 
 import numpy as np
 from math import floor, log10
@@ -36,7 +38,7 @@ class ModelRunner:
             needed to run the model
         """
         self.config = config
-        self.output_controoler = output_controller
+        self.output_controller = output_controller
         self.grids = grids
 
     def run_model(self, init_co2: float,
@@ -52,11 +54,14 @@ class ModelRunner:
         """
         for grid in self.grids:
             for cell in grid:
-                new_temp = self.calculate_cell_temperature(init_co2, new_co2, cell)
+                new_temp = self.calculate_cell_temperature(init_co2, new_co2, cell, self.config)
                 cell.set_temperature(new_temp)
 
-    def calculate_cell_temperature(self, init_co2: float, new_co2: float,
-                                   grid_cell: 'GridCell') -> float:
+    def calculate_cell_temperature(self,
+                                   init_co2: float,
+                                   new_co2: float,
+                                   grid_cell: 'GridCell',
+                                   config: Dict[str, object]) -> float:
         """
         Calculate the change in temperature of a specific grid cell due to a
         change in CO2 levels in the atmosphere.
@@ -67,26 +72,37 @@ class ModelRunner:
             The new amount of CO2 in the atmosphere
         :param grid_cell:
             A GridCell object containing average temperature and relative humidity
+        :param config:
+            Configuration options for the model run
         :return:
             The change in surface temperature for the provided grid cell
             after the given change in CO2
         """
+        co2_weight_func = cnf.get_transparency_weight_func(config[cnf.CO2_WEIGHT])
+        h2o_weight_func = cnf.get_transparency_weight_func(config[cnf.H2O_WEIGHT])
+
         init_temperature = grid_cell.get_temperature()
         relative_humidity = grid_cell.get_relative_humidity()
         albedo = grid_cell.get_albedo()
         init_transparency = calculate_transparency(init_co2,
                                                    init_temperature,
-                                                   relative_humidity)
-        k = self._calibrate_constant(init_temperature, albedo, init_transparency)
+                                                   relative_humidity,
+                                                   co2_weight_func,
+                                                   h2o_weight_func)
+        k = calibrate_constant(init_temperature, albedo, init_transparency)
 
         mid_transparency = calculate_transparency(new_co2,
                                                   init_temperature,
-                                                  relative_humidity)
-        mid_temperature = self._get_new_temperature(albedo, mid_transparency, k)
+                                                  relative_humidity,
+                                                  co2_weight_func,
+                                                  h2o_weight_func)
+        mid_temperature = get_new_temperature(albedo, mid_transparency, k)
         final_transparency = calculate_transparency(new_co2,
                                                     mid_temperature,
-                                                    relative_humidity)
-        final_temperature = self._get_new_temperature(albedo, final_transparency, k)
+                                                    relative_humidity,
+                                                    co2_weight_func,
+                                                    h2o_weight_func)
+        final_temperature = get_new_temperature(albedo, final_transparency, k)
         return final_temperature
 
     def _calibrate_constant(self, temperature, albedo, transparency) -> float:
@@ -135,21 +151,10 @@ if __name__ == '__main__':
         .use_albedo_source(pr.landmask_albedo_data) \
         .get_gridded_data()
 
+    conf = cnf.DEFAULT_CONFIG
+    conf[cnf.CO2_WEIGHT] = cnf.WEIGHT_BY_PROXIMITY
+    conf[cnf.H2O_WEIGHT] = cnf.WEIGHT_BY_PROXIMITY
     run_model(1, 2, grid_cells)
 
     writer = ModelOutput("arrhenius_x2", grid_cells)
     writer.write_output()
-    grid_number = 1
-    result = ""
-    for grid in grid_cells:
-        result = result + "===== Grid " + str(grid_number) + " ===== \n"
-        for latitude in grid:
-            avg_temp_change = 0
-            count = 0
-            for cell in latitude:
-                avg_temp_change += cell.get_temperature_change()
-                count += 1
-            avg_temp_change = avg_temp_change / count
-            result = result + "\t\t" + str(latitude[0].get_latitude()) \
-                     + ": " + str(avg_temp_change) + " degrees Celcius \n"
-    print(result)
