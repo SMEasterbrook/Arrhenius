@@ -7,6 +7,25 @@
         "year": {
             "type": "integer"
         },
+	"grid": {
+            "dims": {
+                 "type": "object",
+                 "properties": {
+                     "lat": {
+                         "type": "numeric",
+                         "minimumExclusive": 0
+                     },
+                     "lon": {
+                         "type": "numeric",
+                         "minimumExclusive": 0
+                     }
+                 }
+             },
+             "repr": { 
+                 "type": "string",
+                 "enum": ["count", "width"]
+             }
+        },
         "num_layers": {
             "type": "integer",
 	    "minimum": 1

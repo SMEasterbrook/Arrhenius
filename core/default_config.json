@@ -1,5 +1,12 @@
 {
     "year": 1895,
+    "grid": {
+        "dims": {
+            "lat": 10,
+            "lon": 20
+        },
+        "repr": "width"
+    },
     "num_layers": 1,
     "num_iters": 1,
     "aggregate_lat": "before",
