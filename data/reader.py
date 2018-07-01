@@ -13,9 +13,7 @@ class NetCDFReader:
                  format: str = "NETCDF4") -> None:
         """
         Create a TimeboundNetCDFReader to access data in a NetCDF file.
-
         The file is lazy-loaded upon the first call to the read method.
-
         :param file_name:
             The NetCDF file in which the desired dataset is contained
         :param format:
@@ -41,10 +39,8 @@ class NetCDFReader:
         """
         Returns the data under the specified header, which is not associated
         with a time field.
-
         Subclasses must provide a data-set specific override of this method,
         since different datasets may have different structures.
-
         :param datapoint:
             The heading of the required data
         :return:
@@ -59,7 +55,6 @@ class NetCDFReader:
     def latitude(self: 'NetCDFReader') -> ndarray:
         """
         Returns the NetCDF data file's latitude variable values.
-
         :return: The dataset's latitude variable
         """
         return self.collect_untimed_data("latitude")
@@ -67,7 +62,6 @@ class NetCDFReader:
     def longitude(self: 'NetCDFReader') -> ndarray:
         """
         Returns the NetCDF data file's longitude variable values.
-
         :return: The dataset's longitude variable
         """
         return self.collect_untimed_data("longitude")
@@ -87,7 +81,6 @@ class TimeboundNetCDFReader(NetCDFReader):
         Retrieve the data under the variable specified by var, limited to the
         current year. Only applies to datasets that have a time value for
         at least the requested datapoint.
-
         :param datapoint:
             The name of the variable requested from the dataset
         :return:
@@ -105,10 +98,8 @@ class TimeboundNetCDFReader(NetCDFReader):
         """
         Returns the data under the specified header, taken from the selected
         year.
-
         Subclasses must provide a data-set specific override of this method,
         since different datasets may have different structures.
-
         :param datapoint:
             The name of the variable requested from the dataset
         :param year:

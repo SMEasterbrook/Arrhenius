@@ -8,7 +8,6 @@ class ArrheniusDataReader(NetCDFReader):
     """
     A NetCDF dataset reader designed to read from the Arrhenius Project's
     dataset for Arrhenius' original gridded temperature and humidity data.
-
     The dataset only contains values for one year (1895), so its data is
     all considered two-dimensional, without any time dimension involved.
     For this reason, temperature and humidity data can be retrieved from

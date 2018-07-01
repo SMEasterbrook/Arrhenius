@@ -13,7 +13,6 @@ class ClimateDataCollector:
     Assembles various types of data, including surface temperature, albedo,
     and atmospheric absorbption coefficients, and ensures that data formatting
     is consistent between data types.
-
     Designed for flexibility in data sources, and allows for sources to be
     swapped out during execution. This may be used to try out different dataset
     files to test performance, or to input stub or mock data providers to help
@@ -24,11 +23,9 @@ class ClimateDataCollector:
                  grid: 'GridDimensions' = GridDimensions((10, 20))) -> None:
         """
         Instantiate a new ClimateDataCollector instance.
-
         Takes an optional parameter grid, which is a set of grid dimensions.
         If no value is provided, a default grid will be used with 18 cells in
         each of the latitude and longitude dimensions.
-
         :param grid:
             An optional set of grid dimensions
         """
@@ -50,7 +47,6 @@ class ClimateDataCollector:
         Select dimensions for a new latitude and longitude grid, to which
         all gridded data is fitted. Returns the collector object, so that
         repeated builder method calls can be continued.
-
         :param grid:
             The dimensions of the grid on which to place the data
         """
@@ -64,10 +60,8 @@ class ClimateDataCollector:
         Load a new temperature provider function, used as an access point to
         temperature data. Returns the collector object, so that repeated
         builder method calls can be continued.
-
         Calling this function voids any previously cached grid data, including
         relative humidity and albedo values.
-
         :param temp_src:
             A new temperature provider function
         :return:
@@ -83,10 +77,8 @@ class ClimateDataCollector:
         Load a new relative humidity provider function, used as an access point
         to humidity data. Returns the collector object, so that repeated
         builder method calls can be continued.
-
         Calling this function voids any previously cached data, including
         temperature and albedo values.
-
         :param r_hum_src:
             A new relative humidity provider function
         :return:
@@ -102,10 +94,8 @@ class ClimateDataCollector:
         Load a new albedo provider function, used as an access point to
         surface albedo data. Returns the collector object, so that repeated
         builder method calls can be continued.
-
         Calling this function voids any previously cached grid data, including
         temperature and relative humidity values.
-
         :param albedo_src:
             A new albedo provider function
         :return:
@@ -121,9 +111,7 @@ class ClimateDataCollector:
         Load a new absorbance provider function, used as an access point to
         atmospheric heat absorbance data. Returns the collector object, so
         that repeated builder method calls can be continued.
-
         Calling this function voids any previously cached absorbance data.
-
         :param absorbance_src:
             A new absorbance provider function
         :return:
@@ -138,16 +126,13 @@ class ClimateDataCollector:
         Combines and returns all gridded surface data, including surface
         temperature, relative humidity, and surface albedo. The data is
         returned having been converted to the grid loaded most recently.
-
         It is assumed that temperature, relative humidity, and albedo are time
         dependent. That is, the data arrays for those variables have three
         dimensions, the first of which is time. It is expected that these two
         data have the same gradations of their time dimensions, e.g.
         temperature and humidity are both measured in 3-month segments.
-
         Raises an exception if not all of the required data providers have
         been loaded through builder methods.
-
         :return:
             An array of gridded surface data
         """
@@ -212,16 +197,13 @@ class ClimateDataCollector:
     def get_absorbance_data(self: CDC) -> Union[List[List[float]], float]:
         """
         Builds and returns atmospheric absorbance data.
-
         This data may be in the form of a float, if the collector is using
         a simple absorbance provider function; otherwise, it may also return
         a 2-D grid with an absorbance value for different areas of the
         atmosphere. It should be possible to predict which type will be
         returned, given which absorbance provider function is in use.
-
         Raises an exception if not all of the required data providers have
         been loaded through builder methods.
-
         :return:
             Global or gridded atmospheric heat absorbance data
         """
