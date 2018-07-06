@@ -178,6 +178,34 @@ class OutputController:
         parent = self._navigate_collection_path(parent_collections)
         parent[output_type] = handler
 
+    def change_handler_if_enabled(self: 'OutputController',
+                                  output_type: 'OutputConfig',
+                                  handler: OutputTypeHandler,
+                                  parent_collections: Tuple[str, ...] = ()) -> None:
+        """
+        Set the handler function for output_type to handler, but only if
+        output_type is already enabled.
+
+        By default, output_type will be looked for in the top level of the
+        collections hierarchy: that is, not in any collection at all. The
+        optional third argument specifies the path to a collection in which
+        to look for output_type and possibly change its handler. No other
+        collections will be affected, nor will the top level of the
+        collections hierarchy.
+
+        :param output_type:
+            The type of output being registered
+        :param handler:
+            A function that will be called on any output of that type
+        :param parent_collections:
+            A tuple of all the collections in which the output type is nested,
+            in order of appearance in the collections hierarchy.
+        """
+        parent_collection = self._navigate_collection_path(parent_collections)
+
+        if output_type in parent_collection:
+            parent_collection[output_type] = handler
+
     def submit_output(self: 'OutputController',
                       output_type: 'OutputConfig',
                       data: object,
