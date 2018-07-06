@@ -1,12 +1,9 @@
 from enum import Enum, auto
 from typing import Tuple, Dict, Callable, Optional
 
-from core.configuration import Config
-
-
 # Type aliases
-OutputTypeHandler = Callable[[str, object], None]
-CollectionHandler = Callable[[str, Config, object], None]
+OutputTypeHandler = Callable[..., None]
+CollectionHandler = Callable[..., None]
 
 
 class OutputConfig(Enum):
@@ -81,6 +78,24 @@ class Debug(OutputConfig):
     PRINT_NOTICES = auto()
 
 
+def prefix_print(data: object,
+                 prefix: Optional[str] = None) -> None:
+    """
+    Print data in a formatted manner. Begin the line by printing the contents
+    of the second argument, followed by a colon, if the second argument is
+    provided and is not None. Otherwise just print the data.
+
+    :param data:
+        Data to be printed to console
+    :param prefix:
+        An optional string that may be printed before the data
+    """
+    if prefix is None:
+        print(data)
+    else:
+        print(prefix + ":", data)
+
+
 # Keys in collection dictionaries
 COLLECTION_SUBTYPES = "Contents"
 COLLECTION_HANDLERS = "Handlers"
@@ -133,7 +148,7 @@ class OutputController:
     def enable_output_type(self: 'OutputController',
                            output_type: 'OutputConfig',
                            parent_collections: Tuple[str, ...] = (),
-                           handler: OutputTypeHandler = print) -> None:
+                           handler: OutputTypeHandler = prefix_print) -> None:
         """
         Register an output type to allow its output to be processed.
 
