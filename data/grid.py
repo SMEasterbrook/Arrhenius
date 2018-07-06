@@ -537,3 +537,62 @@ class LatLongGrid:
             converted_data.append(converted_row)
 
         return np.array(converted_data)
+
+    def latitude_bands(self: 'LatLongGrid') -> 'LatLongGrid':
+        """
+        Average out all values within each latitudinal band in the grid,
+        returning a new grid with those values.
+
+        The new grid will have the same number of latitude gradations as
+        the original. However, it will have only a single column of longitude.
+
+        Temperature, humidity, and albedo in each band are the means of the
+        respective variables in each grid cell in the row. Temperature change
+        is given by the difference between average final temperature and
+        average initial temperature over each cell in the band.
+
+        :return:
+            A grid equivalent to this one, with one column of latitude.
+        """
+        new_cells = []
+
+        for lat_index in range(len(self._data)):
+            # Accumulator variables for initial temperature, final temperature
+            # and all other variables that the new latitude band will inherit.
+            pre_temp_sum = 0
+            post_temp_sum = 0
+            humidity_sum = 0
+            albedo_sum = 0
+
+            # Do no count null cells or those with missing values.
+            num_valid_cells = 0
+
+            for cell in self._data[lat_index]:
+                if cell is not None:
+                    # Add the current cell's variables to accumulators.
+                    post_temp_sum += cell.get_temperature()
+                    pre_temp_sum += cell.get_temperature()\
+                        - cell.get_temperature_change()
+                    humidity_sum += cell.get_relative_humidity()
+                    albedo_sum += cell.get_albedo()
+
+                    num_valid_cells += 1
+
+            # Protect from zero-division errors by filling a null value into
+            # the grid where no valid cells existed in the row.
+            if num_valid_cells > 0:
+                # Calculate means for every variable, and load into a
+                # grid cell.
+                combined_cell = GridCell(pre_temp_sum / num_valid_cells,
+                                           humidity_sum / num_valid_cells,
+                                           albedo_sum / num_valid_cells)
+
+                # Set the grid cell's temperature from its initial mean to
+                # the final mean, allowing the grid cell to record the
+                # temperature change.
+                combined_cell.set_temperature(post_temp_sum / num_valid_cells)
+                new_cells.append([combined_cell])
+            else:
+                new_cells.append([None])
+
+        return LatLongGrid(new_cells)
