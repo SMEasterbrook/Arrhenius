@@ -1,6 +1,7 @@
 from core.cell_operations import calculate_transparency
 
 from data.grid import LatLongGrid
+from data.collector import ClimateDataCollector
 
 import core.configuration as cnf
 from core.output_config import default_output_config
@@ -38,6 +39,11 @@ class ModelRun:
         self.output_controller = output_controller
         self.grids = grids
 
+        self.collector = ClimateDataCollector(config[cnf.GRID])\
+            .use_temperature_source(config[cnf.TEMP_SRC])\
+            .use_humidity_source(config[cnf.HUMIDITY_SRC])\
+            .use_albedo_source(config[cnf.ALBEDO_SRC])
+
     def run_model(self, init_co2: float,
                   new_co2: float) -> None:
         """
@@ -49,6 +55,9 @@ class ModelRun:
         :param new_co2:
             The new amount of CO2 in the atmosphere
         """
+        if self.grids is None:
+            self.grids = self.collector.get_gridded_data()
+
         for grid in self.grids:
             for cell in grid:
                 new_temp = self.calculate_cell_temperature(init_co2, new_co2, cell, self.config)
@@ -143,8 +152,8 @@ class ModelRun:
 if __name__ == '__main__':
     title = "arrhenius_x2"
     conf = cnf.default_config()
-    conf[cnf.CO2_WEIGHT] = cnf.WEIGHT_BY_PROXIMITY
-    conf[cnf.H2O_WEIGHT] = cnf.WEIGHT_BY_PROXIMITY
+    conf[cnf.CO2_WEIGHT] = cnf.weight_by_mean
+    conf[cnf.H2O_WEIGHT] = cnf.weight_by_mean
 
     out_cont = default_output_config(title)
 
