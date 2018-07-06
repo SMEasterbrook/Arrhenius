@@ -5,6 +5,7 @@ from jsonschema import validate
 import xml.etree.ElementTree as ETree
 
 from data.provider import PROVIDERS
+from data.grid import GridDimensions
 
 # Type aliases
 Config = Dict[str, object]
@@ -21,6 +22,7 @@ WEIGHT_BY_PROXIMITY = "mean"
 
 # Keys in configuration dictionaries.
 YEAR = "year"
+GRID = "grid"
 NUM_LAYERS = "layers"
 NUM_ITERS = "iters"
 AGGREGATE_LAT = "aggregate_lat"
@@ -32,6 +34,12 @@ ALBEDO_SRC = "albedo_src"
 ABSORBANCE_SRC = "abs_src"
 CO2_WEIGHT = "CO2_weight"
 H2O_WEIGHT = "H2O_weight"
+
+# Keys for grid specification substructure.
+GRID_DIMS = "dims"
+GRID_TYPE = "repr"
+GRID_FORMAT_LAT = "lat"
+GRID_FORMAT_LON = "lon"
 
 AGGREGATE_BEFORE = "before"
 AGGREGATE_AFTER = "after"
@@ -238,6 +246,11 @@ def from_dict(options: Dict[str, str]) -> Config:
         being replaced with non-serializable objects they identify.
     """
     config = {k: v for k, v in options.items()}
+
+    # Transform grid specifications (strings) into a grid object.
+    grid_dict = config[GRID][GRID_DIMS]
+    grid_dims = (grid_dict[GRID_FORMAT_LAT], grid_dict[GRID_FORMAT_LON])
+    config[GRID] = GridDimensions(grid_dims, config[GRID][GRID_TYPE])
 
     # For data providers, replace strings that identify functions with the
     # functions themselves.
