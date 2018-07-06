@@ -1,4 +1,5 @@
 from typing import Tuple, Dict, Callable
+from frozendict import frozendict
 
 import json
 from jsonschema import validate
@@ -21,6 +22,7 @@ WEIGHT_BY_PROXIMITY = "mean"
 
 
 # Keys in configuration dictionaries.
+RUN_ID = "ID"
 YEAR = "year"
 GRID = "grid"
 NUM_LAYERS = "layers"
@@ -191,6 +193,32 @@ JSON_SCHEMA_FILE = "../core/config_schema.json"
 json_schema = json.loads(open(JSON_SCHEMA_FILE, "r").read())
 
 
+def freeze_dict(mutable_dict: Dict) -> frozendict:
+    """
+    Translates the standard Python dict mutable_dict into immutable form,
+    including any other dictionaries that are values in the dict. Returns
+    this immutable form of the dict.
+
+    Note: Mutable objects, such as user-defined classes, cannot be converted
+    into immutable form in the same way as other types. Therefore mutable_dict
+    must not contain any user-defined classes as values.
+
+    Additionally, list conversion is not supported yet, so mutable_dict must
+    not contain any lists as values.
+
+    :param mutable_dict:
+        A standard Python dict
+    :return:
+        The original dict in immutable form
+    """
+    for k, v in mutable_dict.items():
+        if isinstance(v, dict):
+            mutable_dict[k] = freeze_dict(v)
+
+    return frozendict(mutable_dict)
+
+
+
 def from_json_string(json_data: str) -> Config:
     """
     Produce a configuration object from a string containing JSON-formatted
@@ -246,6 +274,11 @@ def from_dict(options: Dict[str, str]) -> Config:
         being replaced with non-serializable objects they identify.
     """
     config = {k: v for k, v in options.items()}
+
+    # Generate a hash value from the options, which are all strings or
+    # dicts. Each set of options should generate a unique hash.
+    config_hash_val = freeze_dict(options).__hash__()
+    config[RUN_ID] = config_hash_val
 
     # Transform grid specifications (strings) into a grid object.
     grid_dict = config[GRID][GRID_DIMS]
