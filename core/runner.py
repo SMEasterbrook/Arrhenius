@@ -1,6 +1,6 @@
 from core.cell_operations import calculate_transparency
 
-from data.grid import LatLongGrid
+from data.grid import LatLongGrid, GridCell
 from data.collector import ClimateDataCollector
 
 import core.configuration as cnf
@@ -74,7 +74,7 @@ class ModelRun:
         for grid in self.grids:
             for cell in grid:
                 new_temp = self.calculate_cell_temperature(init_co2, new_co2,
-                                                           cell, self.config)
+                                                           cell)
                 cell.set_temperature(new_temp)
 
         # Average values over each latitude band after the model run.
@@ -83,11 +83,10 @@ class ModelRun:
 
         return self.grids
 
-    def calculate_cell_temperature(self,
+    def calculate_cell_temperature(self: 'ModelRun',
                                    init_co2: float,
                                    new_co2: float,
-                                   grid_cell: 'GridCell',
-                                   config: Dict[str, object]) -> float:
+                                   grid_cell: 'GridCell') -> float:
         """
         Calculate the change in temperature of a specific grid cell due to a
         change in CO2 levels in the atmosphere.
@@ -97,15 +96,14 @@ class ModelRun:
         :param new_co2:
             The new amount of CO2 in the atmosphere
         :param grid_cell:
-            A GridCell object containing average temperature and relative humidity
-        :param config:
-            Configuration options for the model run
+            A GridCell object containing average temperature and
+            relative humidity
         :return:
             The change in surface temperature for the provided grid cell
             after the given change in CO2
         """
-        co2_weight_func = config[cnf.CO2_WEIGHT]
-        h2o_weight_func = config[cnf.H2O_WEIGHT]
+        co2_weight_func = self.config[cnf.CO2_WEIGHT]
+        h2o_weight_func = self.config[cnf.H2O_WEIGHT]
 
         init_temperature = grid_cell.get_temperature()
         relative_humidity = grid_cell.get_relative_humidity()
@@ -115,58 +113,61 @@ class ModelRun:
                                                    relative_humidity,
                                                    co2_weight_func,
                                                    h2o_weight_func)
-        k = self.calibrate_constant(init_temperature, albedo, init_transparency)
+        k = calibrate_constant(init_temperature, albedo, init_transparency)
 
         mid_transparency = calculate_transparency(new_co2,
                                                   init_temperature,
                                                   relative_humidity,
                                                   co2_weight_func,
                                                   h2o_weight_func)
-        mid_temperature = self.get_new_temperature(albedo, mid_transparency, k)
+        mid_temperature = get_new_temperature(albedo, mid_transparency, k)
         final_transparency = calculate_transparency(new_co2,
                                                     mid_temperature,
                                                     relative_humidity,
                                                     co2_weight_func,
                                                     h2o_weight_func)
-        final_temperature = self.get_new_temperature(albedo, final_transparency, k)
+        final_temperature = get_new_temperature(albedo, final_transparency, k)
         return final_temperature
 
-    def calibrate_constant(self, temperature, albedo, transparency) -> float:
-        """
-        Calculate the constant K used in Arrhenius' temperature change equation
-        using the initial values of temperature and absorption in a grid cell.
 
-        :param temperature:
-            The temperature of the grid cell
-        :param albedo:
-            The albedo of the grid cell
-        :param transparency:
-            The transparency of the grid cell
+def calibrate_constant(temperature: float,
+                       albedo: float,
+                       transparency: float) -> float:
+    """
+    Calculate the constant K used in Arrhenius' temperature change equation
+    using the initial values of temperature and absorption in a grid cell.
 
-        :return:
-            The calculated constant K
-        """
-        return pow(temperature, 4) * (1 + albedo * transparency)
+    :param temperature:
+        The temperature of the grid cell
+    :param albedo:
+        The albedo of the grid cell
+    :param transparency:
+        The transparency of the grid cell
 
-    def get_new_temperature(self, albedo: float,
-                            new_transparency: float,
-                            k: float) -> float:
-        """
-        Calculate the new temperature after a change in absorption coefficient
+    :return:
+        The calculated constant K
+    """
+    return pow(temperature, 4) * (1 + albedo * transparency)
 
-        :param albedo:
-            The albedo of the grid cell
-        :param new_transparency:
-            The new value of the transparency for the grid cell
-        :param k:
-            A constant used in Arrhenius' temperature change equation
 
-        :return:
-            The change in temperature for a grid cell with the given change in B
-        """
-        denominator = 1 + albedo * new_transparency
+def get_new_temperature(albedo: float,
+                        new_transparency: float,
+                        k: float) -> float:
+    """
+    Calculate the new temperature after a change in absorption coefficient
 
-        return pow((k / denominator), 1 / 4)
+    :param albedo:
+        The albedo of the grid cell
+    :param new_transparency:
+        The new value of the transparency for the grid cell
+    :param k:
+        A constant used in Arrhenius' temperature change equation
+    :return:
+        The change in temperature for a grid cell with the given change in B
+    """
+    denominator = 1 + albedo * new_transparency
+
+    return pow((k / denominator), 1 / 4)
 
 
 if __name__ == '__main__':
