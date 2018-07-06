@@ -45,24 +45,43 @@ class ModelRun:
             .use_albedo_source(config[cnf.ALBEDO_SRC])
 
     def run_model(self, init_co2: float,
-                  new_co2: float) -> None:
+                  new_co2: float) -> List['LatLongGrid']:
         """
-        Calculate Earth's surface temperature change due to
-        a change in CO2 levels.
+        Calculate Earth's surface temperature change due to a change in
+        CO2 levels from init_co2 to new_co2.
+
+        Returns a list of grids, each of which represents the state of the
+        Earth's surface over a range of time. The grids contain data produced
+        from the model run.
 
         :param init_co2:
             The initial amount of CO2 in the atmosphere
         :param new_co2:
             The new amount of CO2 in the atmosphere
+        :return:
+            The state of the Earth's surface based on the model's calculations
         """
         if self.grids is None:
             year_of_interest = self.config[cnf.YEAR]
             self.grids = self.collector.get_gridded_data(year_of_interest)
 
+        # Average values over each latitude band before the model run.
+        if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_BEFORE:
+            self.grids = [grid.latitude_bands() for grid in self.grids]
+
+        # Run the body of the model, calculating temperature changes for each
+        # cell in the grid.
         for grid in self.grids:
             for cell in grid:
-                new_temp = self.calculate_cell_temperature(init_co2, new_co2, cell, self.config)
+                new_temp = self.calculate_cell_temperature(init_co2, new_co2,
+                                                           cell, self.config)
                 cell.set_temperature(new_temp)
+
+        # Average values over each latitude band after the model run.
+        if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_AFTER:
+            self.grids = [grid.latitude_bands() for grid in self.grids]
+
+        return self.grids
 
     def calculate_cell_temperature(self,
                                    init_co2: float,
@@ -153,10 +172,11 @@ class ModelRun:
 if __name__ == '__main__':
     title = "arrhenius_x2"
     conf = cnf.default_config()
+    conf[cnf.AGGREGATE_LAT] = cnf.AGGREGATE_AFTER
     conf[cnf.CO2_WEIGHT] = cnf.weight_by_mean
     conf[cnf.H2O_WEIGHT] = cnf.weight_by_mean
 
     out_cont = default_output_config(title)
 
     model = ModelRun(conf, out_cont)
-    model.run_model(1, 2)
+    grids = model.run_model(1, 2)
