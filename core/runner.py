@@ -56,7 +56,8 @@ class ModelRun:
             The new amount of CO2 in the atmosphere
         """
         if self.grids is None:
-            self.grids = self.collector.get_gridded_data()
+            year_of_interest = self.config[cnf.YEAR]
+            self.grids = self.collector.get_gridded_data(year_of_interest)
 
         for grid in self.grids:
             for cell in grid:
