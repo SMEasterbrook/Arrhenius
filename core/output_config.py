@@ -104,23 +104,14 @@ class OutputController:
 
     Each collection or output type requires a handler function that is
     executed on any data that is associated with that collection or type.
-    For collections, the collection's substructure is passed into the handler
-    along with the data, so that the handler may know which output types were
-    registered in the collection.
+    For collections, additional information may be passed into the handler
+    so that the collection can know about its contents.
     """
-    def __init__(self: 'OutputController',
-                 model_run_title: str) -> None:
+    def __init__(self: 'OutputController') -> None:
         """
         Create a new OutputController. Initially, no output types or
         collections are registered in the controller.
-
-        A title parameter describes the model run, and should be unique and
-        informative. The title may be used for some output types.
-
-        :param model_run_title:
-            The title of the model run
         """
-        self._title = model_run_title
         self._output_tree = {}
 
     def _navigate_collection_path(self: 'OutputController',
@@ -317,7 +308,7 @@ DATASET_VARS_PATH = (PRIMARY_OUTPUT, DATASET_VARS)
 IMAGES_PATH = (PRIMARY_OUTPUT, IMAGES)
 
 
-def empty_output_config(title: str) -> 'OutputController':
+def empty_output_config() -> 'OutputController':
     """
     Returns a OutputController instance with basic collection structure
     initialized, but without any output types or handlers added.
@@ -334,12 +325,10 @@ def empty_output_config(title: str) -> 'OutputController':
 
     Further changes or additions may be made to this instance.
 
-    :param title:
-        The name of this model run
     :return:
         An empty output controller, with basic collection structure
     """
-    controller = OutputController(title)
+    controller = OutputController()
 
     # Create empty collections.
     controller.register_collection(PRIMARY_OUTPUT)
@@ -349,7 +338,7 @@ def empty_output_config(title: str) -> 'OutputController':
     return controller
 
 
-def default_output_config(title: str) -> 'OutputController':
+def default_output_config() -> 'OutputController':
     """
     Returns an OutputController instance with default settings.
 
@@ -361,12 +350,10 @@ def default_output_config(title: str) -> 'OutputController':
     No other variables are enabled. Further changes may be made to this
     instance.
 
-    :param title:
-        The name of this model run
     :return:
         An output controller with default settings
     """
-    controller = empty_output_config(title)
+    controller = empty_output_config()
 
     # Set primary output handler function.
     # Placeholder is print until a proper output function is developed.

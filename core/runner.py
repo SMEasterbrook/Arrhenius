@@ -177,7 +177,7 @@ if __name__ == '__main__':
     conf[cnf.CO2_WEIGHT] = cnf.weight_by_mean
     conf[cnf.H2O_WEIGHT] = cnf.weight_by_mean
 
-    out_cont = default_output_config(title)
+    out_cont = default_output_config()
 
     model = ModelRun(conf, out_cont)
     grids = model.run_model(1, 2)
