@@ -174,24 +174,30 @@ class OutputController:
 
     def submit_output(self: 'OutputController',
                       output_type: 'OutputConfig',
-                      data: object) -> None:
+                      data: object,
+                      *bonus_args) -> None:
         """
         Submit data for output, associated with one type of output as
         described by an OutputConfig subclass. The output will be ignored
         if the output type is not registered with this instance.
 
         If the output type is registered with this instance, its handler
-        function will be executed, taking this model run's title as its
-        first argument, and the data as its second argument.
+        function will be executed, taking the data parameter as its first
+        argument. Any further arguments after the data will be passed into
+        the handler function in the same order as they are passed into this
+        method.
 
         :param output_type:
             The type of output the data is associated with
         :param data:
             Data to be output
+        :param bonus_args:
+            A series of any other arguments that will be passed into the
+            handler function, in order of passing
         """
         if output_type in self._output_tree:
             handler = self._output_tree[output_type]
-            handler(self._title, data)
+            handler(data, bonus_args)
 
     def register_collection(self: 'OutputController',
                             collection_name: str,
@@ -267,20 +273,17 @@ class OutputController:
 
     def submit_collection_output(self: 'OutputController',
                                  collection_path: Tuple[str, ...],
-                                 data: object) -> None:
+                                 data: object,
+                                 *bonus_args) -> None:
         """
         Submit data for output, associated with the collection described by
         the collection path argument.
 
         This operation is only valid if a handler function has been registered
         with the collection in question. If so, this handler is invoked with
-        the model run's title as its first argument, a dict containing the
-        collection's substructure as its second argument, and the data as its
-        third argument.
-
-        The second argument, the collection structure, contains information
-        such as child collections, and a set of output types that are enabled
-        within the collection.
+        the provided data as its first argument. Any further arguments after
+        the data will be passed into the handler function in the same order
+        by which they are passed into this method.
 
         Precondition:
             A handler has been registered with this collection.
@@ -289,12 +292,15 @@ class OutputController:
             A path to the collection in question through its ancestors
         :param data:
             Data to be output
+        :param bonus_args:
+            A series of any other arguments that will be passed into the
+            handler function, in order of passing
         """
         collection = self._navigate_collection_path(collection_path)
 
         if COLLECTION_HANDLERS in collection:
             handler = collection[COLLECTION_HANDLERS]
-            handler(self._title, collection, data)
+            handler(data, bonus_args)
         else:
             raise LookupError("No handler function loaded for collection"
                               "{}".format(collection_path))
