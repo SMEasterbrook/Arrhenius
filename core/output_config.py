@@ -121,8 +121,7 @@ class OutputController:
             The title of the model run
         """
         self._title = model_run_title
-        self._collections = {}
-        self._output_types = {}
+        self._output_tree = {}
 
     def _navigate_collection_path(self: 'OutputController',
                                   collection_path: Tuple[str, ...]) -> Dict:
@@ -134,7 +133,7 @@ class OutputController:
         :return:
             The collection defined by the path
         """
-        collection = self._collections
+        collection = self._output_tree
         for collection_name in collection_path:
             collection = collection[collection_name]
 
@@ -142,13 +141,20 @@ class OutputController:
 
     def enable_output_type(self: 'OutputController',
                            output_type: 'OutputConfig',
+                           parent_collections: Tuple[str, ...] = (),
                            handler: OutputTypeHandler = print) -> None:
         """
         Register an output type to allow its output to be processed.
 
+        The output type will by default be applied to the upper-most level
+        of the collection hierarchy, and will not be contained in any
+        collection. However, a collection can be specified by a path to the
+        collection to which the output type will be added, passed through the
+        parameter parent_collections.
+
         When any data is submitted for output that is associated with the
         given output type, it will by default be printed to the console.
-        If a handler is provided through the optional second argument,
+        If a handler is provided through the optional third argument,
         this handler will be invoked instead.
 
         Once an output type is enabled, it cannot be disabled. However, its
@@ -157,10 +163,14 @@ class OutputController:
 
         :param output_type:
             The type of output being registered
+        :param parent_collections:
+            A tuple of all the collections in which the output type is nested,
+            in order of appearance in the collections hierarchy.
         :param handler:
             A function that will be called on any output of that type
         """
-        self._output_types[output_type] = handler
+        parent = self._navigate_collection_path(parent_collections)
+        parent[output_type] = handler
 
     def submit_output(self: 'OutputController',
                       output_type: 'OutputConfig',
@@ -179,8 +189,8 @@ class OutputController:
         :param data:
             Data to be output
         """
-        if output_type in self._output_types:
-            handler = self._output_types[output_type]
+        if output_type in self._output_tree:
+            handler = self._output_tree[output_type]
             handler(self._title, data)
 
     def register_collection(self: 'OutputController',
