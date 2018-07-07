@@ -3,7 +3,9 @@ from typing import List, Tuple
 
 from data.resources import OUTPUT_REL_PATH
 from data.writer import NetCDFWriter
-from data.grid import extract_multidimensional_grid_variable
+from data.grid import LatLongGrid, extract_multidimensional_grid_variable
+
+from core.output_config import global_output_center, DATASET_VARS, IMAGES
 
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap
@@ -30,18 +32,9 @@ class ModelImageRenderer:
         list. the There must be three dimensions to the data: time first,
         followed by latitude and longitude.
 
-        The time dimension can be any size (including 1), but the latitude and
-        longitude dimensions must match the numbers given in the second grid
-        parameter.
-
-        The grid must be a tuple of two numbers which represent the width of
-        each grid cell in degrees latitude and longitude, respectively.
-
         :param data:
             An array-like structure of numeric values, representing temperature
             over a globe
-        :param grid:
-            The latitude and longitude widths of a cell in the data's grid
         """
         self._data = data
         self._grid = data.dimensions()
@@ -139,16 +132,6 @@ class ModelOutput:
         grid objects. Each grid in the list represents a segment of time, such
         as a month or a season. All grids must have the same dimensions.
 
-        Finally, the title parameter gives the name of the directory that
-        will store output files. This directory will be located within a
-        directory called 'output' within the program's running directory.
-        Output files will also be named after this title, with possible
-        deviations, for example to denote between different seasons amongst
-        a set of output files that each represents a season.
-
-        :param title:
-            The base name of the output files, and of the directory that will
-            store them
         :param data:
             A list of latitude-longitude grids of data
         """
@@ -158,6 +141,78 @@ class ModelOutput:
 
         self._data = data
         self._grid = data[0].dimensions()
+
+    def write_dataset(self: 'ModelOutput',
+                      data: List['LatLongGrid'],
+                      dir_path: str,
+                      dataset_name: str) -> None:
+        """
+        Produce a NetCDF dataset, with the name given by dataset_name.nc,
+        containing the variables in the data parameter that the output
+        controller allows. The dataset will be written to the specified
+        path in the file system.
+
+        The dataset contains all the dimensions that are used in the data
+        (e.g. time, latitude, longitude) as well as variables including
+        final temperature, temperature change, humidity, etc. according
+        to which of the ReportDatatype output types are enabled in the
+        current output controller.
+
+        :param data:
+            Output from an Arrhenius model run
+        :param dir_path:
+            The directory where the dataset will be written
+        :param dataset_name:
+            The name of the dataset
+        """
+        # Write the data out to a NetCDF file in the output directory.
+        grid_by_count = self._grid.dims_by_count()
+        output_path = path.join(dir_path, dataset_name)
+
+        print("Writing NetCDF dataset...")
+        nc_writer = NetCDFWriter() \
+            .global_attribute("description", "Output for an Arrhenius model"
+                                             "run.") \
+            .dimension('time', np.int32, len(self._data), (0, len(self._data))) \
+            .dimension('latitude', np.int32, grid_by_count[0], (-90, 90)) \
+            .dimension('longitude', np.int32, grid_by_count[1], (-180, 180)) \
+
+        nc_writer.write(output_path)
+
+    def write_images(self: 'ModelOutput',
+                     data: List['LatLongGrid'],
+                     output_path: str,
+                     img_base_name: str = "") -> None:
+        """
+        Produce a series of maps displaying some of the results of an
+        Arrhenius model run according to what variable the output controller
+        allows. Images are stored in a directory given by output_path.
+
+        One image will be produced per time segment per variable for which
+        output is allowed by the output controller, based on which
+        ReportDatatype output types are enabled. The optional argument
+        img_base_name specifies a prefix that will be added to each of the
+        image files to identify which model run they belong to.
+
+        :param data:
+            The output from an Arrhenius model run
+        :param output_path:
+            The directory where image files will be stored
+        :param img_base_name:
+            A prefix that will start off the names of all the image files
+        """
+        file_ext = '.png'
+
+        # Write an image file for each time segment.
+        for i in range(len(self._data)):
+            print("Preparing to write image file {}...".format(i))
+            img_name = "_".join([img_base_name, str(i + 1) + file_ext])
+            img_path = path.join(output_path, img_name)
+
+            # Produce and save the image.
+            print("\tSaving image...")
+            g = ModelImageRenderer(data[i])
+            g.save_image(img_path, (-8, 8))
 
     def write_output(self: 'ModelOutput',
                      run_title: str) -> None:
@@ -174,43 +229,15 @@ class ModelOutput:
         out_dir = Path(out_dir_path)
         out_dir.mkdir(exist_ok=True)
 
-        out_file_path = path.join(out_dir_path, run_title + ".nc")
-        file_ext = '.png'
-
-        # Write the data out to a NetCDF file in the output directory.
-        grid_by_count = self._grid.dims_by_count()
-        grid_by_width = self._grid.dims_by_width()
-        all_dims = ['time', 'latitude', 'longitude']
-
-        print("Writing NetCDF dataset...")
-        nc_writer = NetCDFWriter()\
-            .global_attribute("description", "Output for an Arrhenius model"
-                                             "run" + run_title + ".")\
-            .dimension('time', np.int32, len(self._data), (0, len(self._data)))\
-            .dimension('latitude', np.int32, grid_by_count[0], (-90, 90))\
-            .dimension('longitude', np.int32, grid_by_count[1], (-180, 180))\
-            .variable('temp', np.float32, all_dims)\
-            .variable_attribute("temp", "description",
-                                "Average surface temperature across the {}x{}"
-                                "degree latitude/longitude cell centered"
-                                "at these latitude and longitude coordinates"
-                                .format(grid_by_width[0], grid_by_width[1]))\
-            .variable_attribute("temp", "units", "Degrees Celsius")\
-            .data('temp', extract_multidimensional_grid_variable(self._data,
-                                                                 'temperature',
-                                                                 3))
-        nc_writer.write(out_file_path)
-
-        # Write an image file for each time segment.
-        for i in range(len(self._data)):
-            print("Preparing to write image file {}...".format(i))
-            img_name = run_title + '_' + str(i + 1) + file_ext
-            img_path = path.join(out_dir_path, img_name)
-
-            # Produce and save the image.
-            print("\tSaving image...")
-            g = ModelImageRenderer(self._data[i])
-            g.save_image(img_path, (-8, 8))
+        output_controller = global_output_center()
+        output_controller.submit_collection_output((DATASET_VARS,),
+                                                   self._data,
+                                                   out_dir_path,
+                                                   run_title + ".nc")
+        output_controller.submit_collection_output((IMAGES,),
+                                                   self._data,
+                                                   out_dir_path,
+                                                   run_title)
 
 
 def write_model_output(data: List['LatLongGrid'],
@@ -226,4 +253,9 @@ def write_model_output(data: List['LatLongGrid'],
         A unique name for the output directory
     """
     writer = ModelOutput(data)
+    controller = global_output_center()
+
+    controller.register_collection(DATASET_VARS, handler=writer.write_dataset)
+    controller.register_collection(IMAGES, handler=writer.write_images)
+
     writer.write_output(output_title)

@@ -2,6 +2,7 @@ from core.cell_operations import calculate_transparency
 
 from data.grid import LatLongGrid, GridCell
 from data.collector import ClimateDataCollector
+from data.display import write_model_output
 
 import core.configuration as cnf
 import core.output_config as out_cnf
@@ -185,6 +186,8 @@ if __name__ == '__main__':
     conf[cnf.H2O_WEIGHT] = cnf.weight_by_mean
 
     out_cont = out_cnf.default_output_config()
+    out_cont.register_collection(out_cnf.PRIMARY_OUTPUT,
+                                 handler=write_model_output)
 
     model = ModelRun(conf, out_cont)
     grids = model.run_model(1, 2)

@@ -1,8 +1,6 @@
 from enum import Enum, auto
-from typing import Tuple, Dict, Callable, Optional
+from typing import List, Tuple, Dict, Callable, Optional
 from threading import local
-
-from data.display import write_model_output
 
 # Type aliases
 OutputTypeHandler = Callable[..., None]
@@ -436,7 +434,7 @@ def default_output_config() -> 'OutputController':
 
     # Set primary output handler function.
     # Placeholder is print until a proper output function is developed.
-    controller.register_collection(PRIMARY_OUTPUT, handler=write_model_output)
+    controller.register_collection(PRIMARY_OUTPUT, handler=print)
 
     # Add output types to collections.
     controller.enable_output_type(Debug.PRINT_NOTICES, PRIMARY_OUTPUT_PATH)
