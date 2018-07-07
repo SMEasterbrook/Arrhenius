@@ -85,7 +85,8 @@ class ModelRun:
 
         output_center = out_cnf.global_output_center()
         output_center.submit_collection_output(out_cnf.PRIMARY_OUTPUT_PATH,
-                                               self.grids)
+                                               self.grids,
+                                               self.config[cnf.RUN_ID])
 
         return self.grids
 

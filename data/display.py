@@ -131,7 +131,6 @@ class ModelOutput:
     """
 
     def __init__(self: 'ModelOutput',
-                 title: str,
                  data: List['LatLongGrid']) -> None:
         """
         Instantiate a new ModelOutput object.
@@ -157,25 +156,25 @@ class ModelOutput:
         parent_out_dir = Path(OUTPUT_FULL_PATH)
         parent_out_dir.mkdir(exist_ok=True)
 
-        self._title = title
         self._data = data
         self._grid = data[0].dimensions()
 
-    def write_output(self: 'ModelOutput') -> None:
+    def write_output(self: 'ModelOutput',
+                     run_title: str) -> None:
         """
         Produce NetCDF data files and image files from the provided data, and
-        a directory to hold them.
+        a directory with the name dir_name to hold them.
 
-        One image file is created for every time segment in the data. In the
+        One image file is created per time segment in the data. In the
         case of Arrhenius' model, this is one per season. Only one NetCDF data
         file is produced, in which all time segments are present.
         """
         # Create a directory for this model output if none exists already.
-        out_dir_path = path.join(OUTPUT_FULL_PATH, self._title)
+        out_dir_path = path.join(OUTPUT_FULL_PATH, run_title)
         out_dir = Path(out_dir_path)
         out_dir.mkdir(exist_ok=True)
 
-        out_file_path = path.join(out_dir_path, self._title + ".nc")
+        out_file_path = path.join(out_dir_path, run_title + ".nc")
         file_ext = '.png'
 
         # Write the data out to a NetCDF file in the output directory.
@@ -186,7 +185,7 @@ class ModelOutput:
         print("Writing NetCDF dataset...")
         nc_writer = NetCDFWriter()\
             .global_attribute("description", "Output for an Arrhenius model"
-                                             "run" + self._title + ".")\
+                                             "run" + run_title + ".")\
             .dimension('time', np.int32, len(self._data), (0, len(self._data)))\
             .dimension('latitude', np.int32, grid_by_count[0], (-90, 90))\
             .dimension('longitude', np.int32, grid_by_count[1], (-180, 180))\
@@ -205,10 +204,26 @@ class ModelOutput:
         # Write an image file for each time segment.
         for i in range(len(self._data)):
             print("Preparing to write image file {}...".format(i))
-            img_name = self._title + '_' + str(i + 1) + file_ext
+            img_name = run_title + '_' + str(i + 1) + file_ext
             img_path = path.join(out_dir_path, img_name)
 
             # Produce and save the image.
             print("\tSaving image...")
             g = ModelImageRenderer(self._data[i])
             g.save_image(img_path, (-8, 8))
+
+
+def write_model_output(data: List['LatLongGrid'],
+                       output_title: str) -> None:
+    """
+    Write the results of a model run (data) to disk, in the form of a
+    NetCDF dataset and a series of image files arranged into a directory
+    with the name given by output_title.
+
+    :param data:
+        The output from an Arrhenius model run
+    :param output_title:
+        A unique name for the output directory
+    """
+    writer = ModelOutput(data)
+    writer.write_output(output_title)
