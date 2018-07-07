@@ -164,6 +164,32 @@ def merge_str_tables(table1: List[str],
     return table3
 
 
+def print_grids_as_table(*tables) -> None:
+    """
+    Print all the tables provided as arguments, all adjacent to each other
+    and separated by 12 spaces.
+
+    Tables are two-dimensional array-like objects. For best appearances,
+    all tables should have the same dimensions.
+
+    :param tables:
+        A series of arrays containing tabular data
+    """
+    first = tables[0]
+    first_as_strs = convert_table_to_strs(first)
+
+    for extra in tables[1:]:
+        extra_as_strs = convert_table_to_strs(extra)
+        first_as_strs = merge_str_tables(first_as_strs, extra_as_strs)
+
+    # Print gaps before and after the tables for a cleaner output appearance.
+    print()
+    for row in first_as_strs:
+        print(row)
+    print()
+
+
+
 def sum_table(table: Union[np.ndarray, int],
               modifier: Callable[[int], int] = lambda x: x)\
         -> Tuple[int, int]:
