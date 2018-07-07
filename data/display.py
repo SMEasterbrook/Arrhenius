@@ -17,6 +17,53 @@ import numpy as np
 
 OUTPUT_FULL_PATH = path.join(Path('.').absolute(), OUTPUT_REL_PATH)
 
+# Keys in the dictionary below.
+VAR_TYPE = "Type"
+VAR_ATTRS = "Attrs"
+VAR_UNITS = "Units"
+VAR_DESCRIPTION = "Desc"
+
+# Data describing each variable in the dataset.
+VARIABLE_METADATA = {
+    ReportDatatype.REPORT_TEMP.value: {
+        VAR_TYPE: np.float32,
+        VAR_ATTRS: {
+            VAR_UNITS: "Degrees Celsius",
+            VAR_DESCRIPTION: "Final temperature of the grid cell that is"
+                             "centered at the associated latitude and"
+                             "longitude coordinates"
+        }
+    },
+    ReportDatatype.REPORT_TEMP_CHANGE.value: {
+        VAR_TYPE: np.float32,
+        VAR_ATTRS: {
+            VAR_UNITS: "Degrees Celsius",
+            VAR_DESCRIPTION: "Temperature change observed due to CO2 change"
+                             "for the grid cell that is centered at the"
+                             "associated latitude and longitude coordinates"
+        }
+    },
+    ReportDatatype.REPORT_HUMIDITY.value: {
+        VAR_TYPE: np.float32,
+        VAR_ATTRS: {
+            VAR_UNITS: "Percent Saturation",
+            VAR_DESCRIPTION: "Final relative humidity of the grid cell"
+                             "centered at the associated latitude and"
+                             "longitude coordinates"
+        }
+    },
+    ReportDatatype.REPORT_ALBEDO.value: {
+        VAR_TYPE: np.float32,
+        VAR_ATTRS: {
+            VAR_UNITS: "Decimal Absorption",
+            VAR_DESCRIPTION: "Percent of incoming solar energy absorbed"
+                             "by the Earth's surface within the grid cell"
+                             "centered at the associated latitude and"
+                             "longitude coordinates"
+        }
+    },
+}
+
 
 class ModelImageRenderer:
     """
@@ -216,9 +263,16 @@ class ModelOutput:
                                              "Writing NetCDF dataset...")
         self._dataset.global_attribute("description", "Output for an"
                                                       "Arrhenius model run.")\
-            .dimension('time', np.int32, len(self._data), (0, len(self._data)))\
+            .dimension('time', np.int32, len(data), (0, len(data)))\
             .dimension('latitude', np.int32, grid_by_count[0], (-90, 90)) \
             .dimension('longitude', np.int32, grid_by_count[1], (-180, 180)) \
+
+        for output_type in ReportDatatype:
+            variable_data =\
+                extract_multidimensional_grid_variable(data,
+                                                       output_type.value)
+            global_output_center().submit_output(output_type, variable_data,
+                                                 output_type.value)
 
         self._dataset.write(output_path)
 
@@ -235,18 +289,24 @@ class ModelOutput:
         :param data_type:
             The name of the variable as it will appear in the dataset
         """
-        dims_map = {
-            1: ['latitude'],
-            2: ['latitude', 'longitude'],
-            3: ['time', 'latitude', 'longitude'],
-            4: ['time', 'level', 'latitude', 'longitude']
-        }
+        dims_map = [
+            [],
+            ['latitude'],
+            ['latitude', 'longitude'],
+            ['time', 'latitude', 'longitude'],
+            ['time', 'level', 'latitude', 'longitude']
+        ]
 
         global_output_center().submit_output(Debug.PRINT_NOTICES,
                                              "Writing {} to dataset"
                                              .format(data_type))
-        self._dataset.variable(data_type, np.float32, dims_map[data.ndim])\
-            .data(data_type, data)
+        variable_type = VARIABLE_METADATA[data_type][VAR_TYPE]
+        self._dataset.variable(data_type, variable_type, dims_map[data.ndim])
+
+        for attr, val in VARIABLE_METADATA[data_type][VAR_ATTRS].items():
+            self._dataset.variable_attribute(data_type, attr, val)
+
+        self._dataset.data(data_type, data)
 
     def write_images(self: 'ModelOutput',
                      data: List['LatLongGrid'],
