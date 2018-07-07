@@ -1,8 +1,10 @@
 from core.cell_operations import calculate_transparency
 
-from data.grid import LatLongGrid, GridCell
+from data.grid import LatLongGrid, GridCell,\
+    extract_multidimensional_grid_variable
 from data.collector import ClimateDataCollector
 from data.display import write_model_output
+from data.statistics import convert_grid_data_to_table, print_tables
 
 import core.configuration as cnf
 import core.output_config as out_cnf
@@ -84,12 +86,37 @@ class ModelRun:
         if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_AFTER:
             self.grids = [grid.latitude_bands() for grid in self.grids]
 
-        output_center = out_cnf.global_output_center()
-        output_center.submit_collection_output(out_cnf.PRIMARY_OUTPUT_PATH,
-                                               self.grids,
-                                               self.config[cnf.RUN_ID])
+        self.print_statistic_tables()
+
+        # Finally, write model output to disk.
+        out_cnf.global_output_center().submit_collection_output(
+            out_cnf.PRIMARY_OUTPUT_PATH,
+            self.grids,
+            self.config[cnf.RUN_ID]
+        )
 
         return self.grids
+
+    def print_statistic_tables(self: 'ModelRun') -> None:
+        """
+        Display a series of tables and statistics based on model run results.
+        Which outputs are displayed is determined by the current output
+        controller, and its settings under the SpecialReportDatatype and
+        ReportDatatype categories.
+        """
+        output_center = out_cnf.global_output_center()
+
+        # Prepare data tables.
+        delta_t_name = out_cnf.ReportDatatype.REPORT_TEMP_CHANGE.value
+        delta_temp_data = \
+            extract_multidimensional_grid_variable(self.grids, delta_t_name)
+        delta_temp_table = convert_grid_data_to_table(delta_temp_data)
+
+        # Print tables of data.
+        output_center.submit_output(
+            out_cnf.SpecialReportData.REPORT_DELTA_TEMP_DEVIATIONS,
+            delta_temp_table
+        )
 
     def calculate_cell_temperature(self: 'ModelRun',
                                    init_co2: float,
@@ -188,6 +215,10 @@ if __name__ == '__main__':
     out_cont = out_cnf.default_output_config()
     out_cont.register_collection(out_cnf.PRIMARY_OUTPUT,
                                  handler=write_model_output)
+    out_cont.enable_output_type(
+        out_cnf.SpecialReportData.REPORT_DELTA_TEMP_DEVIATIONS,
+        handler=print_tables
+    )
 
     model = ModelRun(conf, out_cont)
     grids = model.run_model(1, 2)

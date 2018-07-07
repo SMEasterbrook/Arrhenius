@@ -164,7 +164,7 @@ def merge_str_tables(table1: List[str],
     return table3
 
 
-def print_grids_as_table(*tables) -> None:
+def print_tables(*tables) -> None:
     """
     Print all the tables provided as arguments, all adjacent to each other
     and separated by 12 spaces.
