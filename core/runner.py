@@ -4,7 +4,7 @@ from data.grid import LatLongGrid, GridCell
 from data.collector import ClimateDataCollector
 
 import core.configuration as cnf
-from core.output_config import default_output_config
+import core.output_config as out_cnf
 
 from typing import List, Dict
 
@@ -61,6 +61,8 @@ class ModelRun:
         :return:
             The state of the Earth's surface based on the model's calculations
         """
+        out_cnf.set_output_center(self.output_controller)
+
         if self.grids is None:
             year_of_interest = self.config[cnf.YEAR]
             self.grids = self.collector.get_gridded_data(year_of_interest)
@@ -80,6 +82,10 @@ class ModelRun:
         # Average values over each latitude band after the model run.
         if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_AFTER:
             self.grids = [grid.latitude_bands() for grid in self.grids]
+
+        output_center = out_cnf.global_output_center()
+        output_center.submit_collection_output(out_cnf.PRIMARY_OUTPUT_PATH,
+                                               self.grids)
 
         return self.grids
 
@@ -177,7 +183,7 @@ if __name__ == '__main__':
     conf[cnf.CO2_WEIGHT] = cnf.weight_by_mean
     conf[cnf.H2O_WEIGHT] = cnf.weight_by_mean
 
-    out_cont = default_output_config()
+    out_cont = out_cnf.default_output_config()
 
     model = ModelRun(conf, out_cont)
     grids = model.run_model(1, 2)

@@ -451,3 +451,24 @@ OUTPUT = "Out_Center"
 # Set up initial state.
 globals = local()
 globals.output = default_output_config()
+
+
+def global_output_center() -> 'OutputController':
+    """
+    Returns the active thread-specific output controller object.
+
+    :return:
+        The global output controller
+    """
+    return globals.output
+
+
+def set_output_center(output_center: 'OutputController') -> None:
+    """
+    Replace the active thread-specific output controller with output_center.
+    Other threads will not see the change.
+
+    :param output_center:
+        A new output center to be used by this thread
+    """
+    globals.output = output_center
