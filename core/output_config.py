@@ -32,8 +32,6 @@ class ReportDatatype(OutputConfig):
     REPORT_TEMP_CHANGE = 'delta_t'
     # Grid cell relative humidity.
     REPORT_HUMIDITY = 'humidity'
-    # Grid cell humidity change over the model run.
-    REPORT_HUMIDITY_CHANGE = 'delta_hum'
     # Grid cell albedo.
     REPORT_ALBEDO = 'albedo'
 
@@ -233,7 +231,7 @@ class OutputController:
         """
         if output_type in self._output_tree:
             handler = self._output_tree[output_type]
-            handler(data, bonus_args)
+            handler(data, *bonus_args)
 
     def register_collection(self: 'OutputController',
                             collection_name: str,

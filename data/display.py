@@ -3,9 +3,11 @@ from typing import List, Tuple
 
 from data.resources import OUTPUT_REL_PATH
 from data.writer import NetCDFWriter
-from data.grid import LatLongGrid, extract_multidimensional_grid_variable
+from data.grid import LatLongGrid, GridDimensions,\
+    extract_multidimensional_grid_variable
 
-from core.output_config import global_output_center, DATASET_VARS, IMAGES
+from core.output_config import global_output_center, ReportDatatype,\
+    DATASET_VARS, IMAGES
 
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap
@@ -23,7 +25,7 @@ class ModelImageRenderer:
     on a world map projection.
     """
     def __init__(self: 'ModelImageRenderer',
-                 data: 'LatLongGrid') -> None:
+                 data: np.ndarray) -> None:
         """
         Instantiate a new ModelImageReader.
 
@@ -37,7 +39,7 @@ class ModelImageRenderer:
             over a globe
         """
         self._data = data
-        self._grid = data.dimensions()
+        self._grid = GridDimensions((len(data), len(data[0])), "count")
 
         # Some parameters for the visualization are also left as attributes.
         self._continent_linewidth = 0.5
@@ -100,13 +102,49 @@ class ModelImageRenderer:
 
         # Overlap the gridded data on top of the map, and display a colour
         # legend with the appropriate boundaries.
-        img = map.pcolormesh(x, y, self._data.extract_datapoint('delta_t'),
-                             cmap=plt.cm.get_cmap("jet"))
+        img = map.pcolormesh(x, y, self._data, cmap=plt.cm.get_cmap("jet"))
         map.colorbar(img)
         plt.clim(min_max_grades[0], min_max_grades[1])
         # Save the image and clear added components from memory
         plt.savefig(out_path)
         plt.close()
+
+
+def write_image_type(data: np.ndarray,
+                     output_path: str,
+                     img_base_name: str = "") -> None:
+    """
+    Write out a category of output, given by the parameter data, to a
+    directory with the name given by output_path. One image file will
+    be produced for every index in the highest-level dimension in the
+    data.
+
+    The optional parameter img_base_name will be used as the beginning
+    to every image file name. If not specified, image files will simply
+    be named based on the order in which they are produced, e.g. 1.png,
+    2.png, 3.png.
+
+    :param data:
+        A single-variable grid derived from Arrhenius model output
+    :param output_path:
+        The directory where image files will be stored
+    :param img_base_name:
+        A prefix that will start off the names of all the image files
+    """
+    file_ext = '.png'
+
+    # Write an image file for each time segment.
+    for i in range(len(data)):
+        print("Preparing to write image file {}...".format(i))
+        img_name = "_".join([img_base_name, str(i + 1) + file_ext])
+        img_path = path.join(output_path, img_name)
+
+        Path(output_path).mkdir(exist_ok=True)
+
+        # Produce and save the image.
+        print("\tSaving image...")
+        g = ModelImageRenderer(data[i])
+        g.save_image(img_path, (-8, 8))
 
 
 class ModelOutput:
@@ -141,6 +179,7 @@ class ModelOutput:
 
         self._data = data
         self._grid = data[0].dimensions()
+        self._dataset = NetCDFWriter()
 
     def write_dataset(self: 'ModelOutput',
                       data: List['LatLongGrid'],
@@ -170,14 +209,36 @@ class ModelOutput:
         output_path = path.join(dir_path, dataset_name)
 
         print("Writing NetCDF dataset...")
-        nc_writer = NetCDFWriter() \
-            .global_attribute("description", "Output for an Arrhenius model"
-                                             "run.") \
-            .dimension('time', np.int32, len(self._data), (0, len(self._data))) \
+        self._dataset.global_attribute("description", "Output for an"
+                                                      "Arrhenius model run.")\
+            .dimension('time', np.int32, len(self._data), (0, len(self._data)))\
             .dimension('latitude', np.int32, grid_by_count[0], (-90, 90)) \
             .dimension('longitude', np.int32, grid_by_count[1], (-180, 180)) \
 
-        nc_writer.write(output_path)
+        self._dataset.write(output_path)
+
+    def write_dataset_variable(self: 'ModelOutput',
+                               data: np.ndarray,
+                               data_type: str) -> None:
+        """
+        Prepare to write data into a variable by the name of data_type
+        in this instance's NetCDF dataset file. Apply this variable's
+        dimensions and type, along with several attributes.
+
+        :param data:
+            A single-variable grid taken from Arrhenius model output
+        :param data_type:
+            The name of the variable as it will appear in the dataset
+        """
+        dims_map = {
+            1: ['latitude'],
+            2: ['latitude', 'longitude'],
+            3: ['time', 'latitude', 'longitude'],
+            4: ['time', 'level', 'latitude', 'longitude']
+        }
+
+        self._dataset.variable(data_type, np.float32, dims_map[data.ndim])\
+            .data(data_type, data)
 
     def write_images(self: 'ModelOutput',
                      data: List['LatLongGrid'],
@@ -201,18 +262,19 @@ class ModelOutput:
         :param img_base_name:
             A prefix that will start off the names of all the image files
         """
-        file_ext = '.png'
+        output_controller = global_output_center()
 
-        # Write an image file for each time segment.
-        for i in range(len(self._data)):
-            print("Preparing to write image file {}...".format(i))
-            img_name = "_".join([img_base_name, str(i + 1) + file_ext])
-            img_path = path.join(output_path, img_name)
+        # Attempt to output images for each variable output type.
+        for output_type in ReportDatatype:
+            variable_name = output_type.value
+            variable = extract_multidimensional_grid_variable(data,
+                                                              variable_name)
+            img_type_path = path.join(output_path, variable_name)
+            img_type_base_name = "_".join([img_base_name, variable_name])
 
-            # Produce and save the image.
-            print("\tSaving image...")
-            g = ModelImageRenderer(data[i])
-            g.save_image(img_path, (-8, 8))
+            output_controller.submit_output(output_type, variable,
+                                            img_type_path,
+                                            img_type_base_name)
 
     def write_output(self: 'ModelOutput',
                      run_title: str) -> None:
@@ -255,7 +317,17 @@ def write_model_output(data: List['LatLongGrid'],
     writer = ModelOutput(data)
     controller = global_output_center()
 
+    # Upload collection handlers for dataset and image file collections.
     controller.register_collection(DATASET_VARS, handler=writer.write_dataset)
     controller.register_collection(IMAGES, handler=writer.write_images)
+
+    # Change several output type handlers within each collection.
+    for output_type in ReportDatatype:
+        controller.change_handler_if_enabled(output_type,
+                                             (DATASET_VARS,),
+                                             writer.write_dataset_variable)
+        controller.change_handler_if_enabled(output_type,
+                                             (IMAGES,),
+                                             write_image_type)
 
     writer.write_output(output_title)
