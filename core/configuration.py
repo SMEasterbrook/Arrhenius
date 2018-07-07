@@ -277,8 +277,10 @@ def from_dict(options: Dict[str, str]) -> Config:
 
     # Generate a hash value from the options, which are all strings or
     # dicts. Each set of options should generate a unique hash.
-    config_hash_val = freeze_dict(options).__hash__()
-    config[RUN_ID] = config_hash_val
+    # Make all hash keys positive.
+    config_hash_val = abs(freeze_dict(options).__hash__())
+    # Convert to hexadecimal for compaction and remove the 0x from the front.
+    config[RUN_ID] = hex(config_hash_val)[2:]
 
     # Transform grid specifications (strings) into a grid object.
     grid_dict = config[GRID][GRID_DIMS]
