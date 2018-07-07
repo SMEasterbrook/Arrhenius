@@ -214,9 +214,12 @@ def mean(data: np.ndarray) -> float:
     :return:
         The average amongst valid numbers
     """
-    sum_cells, num_valid_cells = sum_table(data, lambda x: x)
-    smpl_mean = sum_cells / num_valid_cells
-    return smpl_mean
+    try:
+        sum_cells, num_valid_cells = sum_table(data, lambda x: x)
+        smpl_mean = sum_cells / num_valid_cells
+        return smpl_mean
+    except ZeroDivisionError:
+        return nan
 
 
 def variance(data: np.ndarray) -> float:
@@ -229,9 +232,12 @@ def variance(data: np.ndarray) -> float:
     :return:
         The variance of the valid numbers
     """
-    sum_sqrs, num_valid_cells = sum_table(data, lambda x: x ** 2)
-    smpl_variance = sum_sqrs / num_valid_cells
-    return smpl_variance
+    try:
+        sum_sqrs, num_valid_cells = sum_table(data, lambda x: x ** 2)
+        smpl_variance = sum_sqrs / num_valid_cells
+        return smpl_variance
+    except ZeroDivisionError:
+        return nan
 
 
 def std_dev(data: np.ndarray) -> float:
