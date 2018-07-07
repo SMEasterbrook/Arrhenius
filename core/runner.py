@@ -76,11 +76,21 @@ class ModelRun:
 
         # Run the body of the model, calculating temperature changes for each
         # cell in the grid.
+        counter = 1
         for grid in self.grids:
+            place = "th" if (not 1 <= counter % 10 <= 3)\
+                             and (not 10 < counter < 20)\
+                         else "st" if counter % 10 == 1\
+                         else "nd" if counter % 10 == 2\
+                         else "rd"
+            report = "Preparing model run on {}{} grid".format(counter, place)
+            self.output_controller.submit_output(out_cnf.Debug.PRINT_NOTICES, report)
+
             for cell in grid:
                 new_temp = self.calculate_cell_temperature(init_co2, new_co2,
                                                            cell)
                 cell.set_temperature(new_temp)
+            counter += 1
 
         # Average values over each latitude band after the model run.
         if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_AFTER:
@@ -162,6 +172,16 @@ class ModelRun:
                                                     co2_weight_func,
                                                     h2o_weight_func)
         final_temperature = get_new_temperature(albedo, final_transparency, k)
+
+        delta_temp_report = "{}  ~~~~  Delta T: {} K" \
+            .format(grid_cell, final_temperature - init_temperature)
+        delta_trans_report = "{}  ~~~~  Delta Transparency: {} K" \
+            .format(grid_cell, final_temperature - init_temperature)
+        self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TEMP,
+                                             delta_temp_report)
+        self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TRANSPARENCY,
+                                             delta_trans_report)
+
         return final_temperature
 
 
