@@ -6,7 +6,7 @@ from data.writer import NetCDFWriter
 from data.grid import LatLongGrid, GridDimensions,\
     extract_multidimensional_grid_variable
 
-from core.output_config import global_output_center, ReportDatatype,\
+from core.output_config import global_output_center, ReportDatatype, Debug,\
     DATASET_VARS, IMAGES
 
 from pathlib import Path
@@ -131,18 +131,22 @@ def write_image_type(data: np.ndarray,
     :param img_base_name:
         A prefix that will start off the names of all the image files
     """
+    output_center = global_output_center()
+    output_center.submit_output(Debug.PRINT_NOTICES,
+                                "Preparing to write {} images"
+                                .format(img_base_name))
     file_ext = '.png'
 
     # Write an image file for each time segment.
     for i in range(len(data)):
-        print("Preparing to write image file {}...".format(i))
         img_name = "_".join([img_base_name, str(i + 1) + file_ext])
         img_path = path.join(output_path, img_name)
 
         Path(output_path).mkdir(exist_ok=True)
 
         # Produce and save the image.
-        print("\tSaving image...")
+        output_center.submit_output(Debug.PRINT_NOTICES,
+                                    "\tSaving image file {}...".format(i))
         g = ModelImageRenderer(data[i])
         g.save_image(img_path, (-8, 8))
 
@@ -208,7 +212,8 @@ class ModelOutput:
         grid_by_count = self._grid.dims_by_count()
         output_path = path.join(dir_path, dataset_name)
 
-        print("Writing NetCDF dataset...")
+        global_output_center().submit_output(Debug.PRINT_NOTICES,
+                                             "Writing NetCDF dataset...")
         self._dataset.global_attribute("description", "Output for an"
                                                       "Arrhenius model run.")\
             .dimension('time', np.int32, len(self._data), (0, len(self._data)))\
@@ -237,6 +242,9 @@ class ModelOutput:
             4: ['time', 'level', 'latitude', 'longitude']
         }
 
+        global_output_center().submit_output(Debug.PRINT_NOTICES,
+                                             "Writing {} to dataset"
+                                             .format(data_type))
         self._dataset.variable(data_type, np.float32, dims_map[data.ndim])\
             .data(data_type, data)
 

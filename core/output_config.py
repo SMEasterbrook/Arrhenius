@@ -438,7 +438,11 @@ def default_output_config() -> 'OutputController':
     controller.enable_output_type(Debug.PRINT_NOTICES, PRIMARY_OUTPUT_PATH)
     controller.enable_output_type(ReportDatatype.REPORT_TEMP_CHANGE,
                                   DATASET_VARS_PATH)
+    controller.enable_output_type(Debug.PRINT_NOTICES,
+                                  DATASET_VARS_PATH)
     controller.enable_output_type(ReportDatatype.REPORT_TEMP_CHANGE,
+                                  IMAGES_PATH)
+    controller.enable_output_type(Debug.PRINT_NOTICES,
                                   IMAGES_PATH)
 
     return controller
