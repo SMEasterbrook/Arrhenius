@@ -60,6 +60,48 @@ def config_options():
     return jsonify(example_config), 200
 
 
+@app.route('/model/dataset', methods=['POST'])
+def scientific_dataset():
+    """
+    Returns a response to an HTTP request for the NetCDF dataset associated
+    with a specified set of model configuration options.
+
+    If the request is a POST request, a configuration dictionary is expected
+    in the request body in the form of a JSON string. Assuming the
+    configuration options are valid, the dataset object will be returned that
+    was produced by a model run using the specified configuration options.
+
+    :return:
+        An HTTP response with the requested dataset attached
+    """
+    # Decode JSON string from request body.
+    config = from_json_string(request.data.decode("utf-8"))
+    run_id = str(config[RUN_ID])
+    response_code = 200
+
+    dataset_name = run_id + ".nc"
+    dataset_parent = path.join(OUTPUT_FULL_PATH, run_id)
+
+    if not Path(dataset_parent, dataset_name).is_file():
+        # Model run on the provided configuration options has not been run;
+        # run it, producing the output directory as well as image files for
+        # the requested variable.
+        output_center = default_output_config()
+
+        # Use initial and final CO2 levels from request body if present, but
+        # replace with 1 and 2 if not specified.
+        init_co2 = float(config.get("co2", 1).get("from", 1))
+        final_co2 = float(config.get("co2", 2).get("to", 2))
+
+        run = ModelRun(config, output_center)
+        run.run_model(init_co2, final_co2)
+        response_code = 201
+
+    # Send the zip file attached to the HTTP response.
+    return send_from_directory(dataset_parent, dataset_name),\
+        response_code
+
+
 @app.route('/model/<varname>/<time_seg>', methods=['POST'])
 def single_model_data(varname: str, time_seg: str):
     """
