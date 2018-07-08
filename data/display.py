@@ -11,6 +11,9 @@ from core.output_config import global_output_center, ReportDatatype, Debug,\
 
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap
+
+import matplotlib
+matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import numpy as np
 
