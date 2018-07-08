@@ -198,7 +198,7 @@ def arrhenius_temperature_data(grid: 'GridDimensions'
     # Regrid the humidity variable to the specified grid, if necessary.
     regridded_data = _regrid_netcdf_variable(data, grid, 3)
 
-    return regridded_data + 273.15
+    return regridded_data
 
 
 def berkeley_temperature_data(grid: 'GridDimensions'
@@ -248,7 +248,7 @@ def berkeley_temperature_data(grid: 'GridDimensions'
                 # of three gives significant performance increases.
                 data_by_lat[k] += clmt_by_lat[k]
 
-    return regridded_data + 273.15
+    return regridded_data
 
 
 def arrhenius_humidity_data(grid: 'GridDimensions'

@@ -163,7 +163,7 @@ class ModelRun:
         co2_weight_func = self.config[cnf.CO2_WEIGHT]
         h2o_weight_func = self.config[cnf.H2O_WEIGHT]
 
-        init_temperature = grid_cell.get_temperature()
+        init_temperature = grid_cell.get_temperature() + 273.15
         relative_humidity = grid_cell.get_relative_humidity()
         albedo = grid_cell.get_albedo()
         init_transparency = calculate_transparency(init_co2,
@@ -195,7 +195,7 @@ class ModelRun:
         self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TRANSPARENCY,
                                              delta_trans_report)
 
-        return final_temperature
+        return final_temperature - 273.15
 
 
 def calibrate_constant(temperature: float,
