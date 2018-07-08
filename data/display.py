@@ -19,6 +19,8 @@ OUTPUT_FULL_PATH = path.join(Path('.').absolute(), OUTPUT_REL_PATH)
 
 # Keys in the dictionary below.
 VAR_TYPE = "Type"
+VAR_RANGE = "Range"
+
 VAR_ATTRS = "Attrs"
 VAR_UNITS = "Units"
 VAR_DESCRIPTION = "Desc"
@@ -27,6 +29,7 @@ VAR_DESCRIPTION = "Desc"
 VARIABLE_METADATA = {
     ReportDatatype.REPORT_TEMP.value: {
         VAR_TYPE: np.float32,
+        VAR_RANGE: (-60, 60),
         VAR_ATTRS: {
             VAR_UNITS: "Degrees Celsius",
             VAR_DESCRIPTION: "Final temperature of the grid cell that is"
@@ -36,6 +39,7 @@ VARIABLE_METADATA = {
     },
     ReportDatatype.REPORT_TEMP_CHANGE.value: {
         VAR_TYPE: np.float32,
+        VAR_RANGE: (-8, 8),
         VAR_ATTRS: {
             VAR_UNITS: "Degrees Celsius",
             VAR_DESCRIPTION: "Temperature change observed due to CO2 change"
@@ -45,6 +49,7 @@ VARIABLE_METADATA = {
     },
     ReportDatatype.REPORT_HUMIDITY.value: {
         VAR_TYPE: np.float32,
+        VAR_RANGE: (0, 100),
         VAR_ATTRS: {
             VAR_UNITS: "Percent Saturation",
             VAR_DESCRIPTION: "Final relative humidity of the grid cell"
@@ -54,6 +59,7 @@ VARIABLE_METADATA = {
     },
     ReportDatatype.REPORT_ALBEDO.value: {
         VAR_TYPE: np.float32,
+        VAR_RANGE: (0.5, 1),
         VAR_ATTRS: {
             VAR_UNITS: "Decimal Absorption",
             VAR_DESCRIPTION: "Percent of incoming solar energy absorbed"
@@ -159,29 +165,35 @@ class ModelImageRenderer:
 
 def write_image_type(data: np.ndarray,
                      output_path: str,
-                     img_base_name: str = "") -> None:
+                     data_type: str,
+                     run_id: str) -> None:
     """
     Write out a category of output, given by the parameter data, to a
     directory with the name given by output_path. One image file will
     be produced for every index in the highest-level dimension in the
     data.
 
-    The optional parameter img_base_name will be used as the beginning
-    to every image file name. If not specified, image files will simply
-    be named based on the order in which they are produced, e.g. 1.png,
-    2.png, 3.png.
+    The third ard fourth parameters specify the name of the variable
+    being represented by this set of images, and the name of the model
+    run respectively. EAch image's name will begin with run_id followed
+    by an underscore followed by data_type. These will be followed by a
+    number indicating the order in which the images were written.
 
     :param data:
         A single-variable grid derived from Arrhenius model output
     :param output_path:
         The directory where image files will be stored
-    :param img_base_name:
-        A prefix that will start off the names of all the image files
+    :param data_type:
+        The name of the variable on which the data is based
+    :param run_id:
+        A unique name for the current model run
     """
     output_center = global_output_center()
     output_center.submit_output(Debug.PRINT_NOTICES,
                                 "Preparing to write {} images"
-                                .format(img_base_name))
+                                .format(data_type))
+
+    img_base_name = "_".join([run_id, data_type])
     file_ext = '.png'
 
     # Write an image file for each time segment.
@@ -195,7 +207,7 @@ def write_image_type(data: np.ndarray,
         output_center.submit_output(Debug.PRINT_NOTICES,
                                     "\tSaving image file {}...".format(i))
         g = ModelImageRenderer(data[i])
-        g.save_image(img_path, (-8, 8))
+        g.save_image(img_path, VARIABLE_METADATA[data_type][VAR_RANGE])
 
 
 class ModelOutput:
@@ -311,7 +323,7 @@ class ModelOutput:
     def write_images(self: 'ModelOutput',
                      data: List['LatLongGrid'],
                      output_path: str,
-                     img_base_name: str = "") -> None:
+                     run_id: str = "") -> None:
         """
         Produce a series of maps displaying some of the results of an
         Arrhenius model run according to what variable the output controller
@@ -327,7 +339,7 @@ class ModelOutput:
             The output from an Arrhenius model run
         :param output_path:
             The directory where image files will be stored
-        :param img_base_name:
+        :param run_id:
             A prefix that will start off the names of all the image files
         """
         output_controller = global_output_center()
@@ -338,11 +350,11 @@ class ModelOutput:
             variable = extract_multidimensional_grid_variable(data,
                                                               variable_name)
             img_type_path = path.join(output_path, variable_name)
-            img_type_base_name = "_".join([img_base_name, variable_name])
 
             output_controller.submit_output(output_type, variable,
                                             img_type_path,
-                                            img_type_base_name)
+                                            variable_name,
+                                            run_id)
 
     def write_output(self: 'ModelOutput',
                      run_title: str) -> None:
