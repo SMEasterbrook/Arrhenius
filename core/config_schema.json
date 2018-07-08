@@ -1,4 +1,19 @@
 {
+    "co2": {
+        "type": "object",
+        "properties": {
+            "from": {
+                "type": "numeric",
+                "minimumExclusive": 0
+            },
+            "to": {
+                "type": "numeric",
+                "minimumExclusive": 0
+            }
+        },
+
+        "required": ["from", "to"]
+    },
     "title": "Arrhenius model configuration",
     "description": "Configuration settings for a run of The Arrhenius Project's climate model",
 
@@ -19,12 +34,16 @@
                          "type": "numeric",
                          "minimumExclusive": 0
                      }
-                 }
+                 },
+
+		 "required": ["lat", "lon"]
              },
              "repr": { 
                  "type": "string",
                  "enum": ["count", "width"]
-             }
+             },
+
+	     "required": ["dims"]
         },
         "num_layers": {
             "type": "integer",
