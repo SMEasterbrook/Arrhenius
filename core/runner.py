@@ -25,7 +25,8 @@ class ModelRun:
     grids: List['LatLongGrid']
 
     def __init__(self, config: Dict[str, object],
-                 output_controller: object, grids: List['LatLongGrid'] = None):
+                 output_controller: 'OutputController',
+                 grids: List['LatLongGrid'] = None) -> None:
         """
         Initialize the model configurations, the output controller, and the
         grid of data to run the model upon.
@@ -41,6 +42,9 @@ class ModelRun:
         self.config = config
         self.output_controller = output_controller
         self.grids = grids
+
+        self.output_controller.register_collection(out_cnf.PRIMARY_OUTPUT,
+                                                   handler=write_model_output)
 
         self.collector = ClimateDataCollector(config[cnf.GRID])\
             .use_temperature_source(config[cnf.TEMP_SRC])\
@@ -117,7 +121,16 @@ class ModelRun:
         output_center = out_cnf.global_output_center()
 
         # Prepare data tables.
+        temp_name = out_cnf.ReportDatatype.REPORT_TEMP.value
         delta_t_name = out_cnf.ReportDatatype.REPORT_TEMP_CHANGE.value
+
+        temp_data = \
+            extract_multidimensional_grid_variable(self.grids, temp_name)
+        temp_table = convert_grid_data_to_table(temp_data)
+
+        output_center.submit_output(out_cnf.ReportDatatype.REPORT_TEMP,
+                                    temp_table)
+
         delta_temp_data = \
             extract_multidimensional_grid_variable(self.grids, delta_t_name)
         delta_temp_table = convert_grid_data_to_table(delta_temp_data)
@@ -233,8 +246,7 @@ if __name__ == '__main__':
     conf[cnf.H2O_WEIGHT] = cnf.weight_by_mean
 
     out_cont = out_cnf.default_output_config()
-    out_cont.register_collection(out_cnf.PRIMARY_OUTPUT,
-                                 handler=write_model_output)
+
     out_cont.enable_output_type(
         out_cnf.SpecialReportData.REPORT_DELTA_TEMP_DEVIATIONS,
         handler=print_tables
