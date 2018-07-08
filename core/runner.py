@@ -245,7 +245,7 @@ if __name__ == '__main__':
     conf[cnf.CO2_WEIGHT] = cnf.weight_by_mean
     conf[cnf.H2O_WEIGHT] = cnf.weight_by_mean
 
-    out_cont = out_cnf.default_output_config()
+    out_cont = out_cnf.development_output_config()
 
     out_cont.enable_output_type(
         out_cnf.SpecialReportData.REPORT_DELTA_TEMP_DEVIATIONS,

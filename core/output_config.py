@@ -418,15 +418,43 @@ def default_output_config() -> 'OutputController':
     Returns an OutputController instance with default settings.
 
     Default settings includes the basic collection structure as described
-    under empty_output_config, and no other collections. The PRIMARY_OUTPUT
-    collection has debug status reports enabled. Both of its children have
-    temperature change enabled, and no other variables.
+    under empty_output_config, and no other collections. The dataset is
+    set to output all variables, while no images will be produced.
+    No console prints are enabled. This is intended for deployment purposes.
 
     No other variables are enabled. Further changes may be made to this
     instance.
 
     :return:
         An output controller with default settings
+    """
+    controller = empty_output_config()
+
+    # Set primary output handler function.
+    # Placeholder is print until a proper output function is developed.
+    controller.register_collection(PRIMARY_OUTPUT, handler=print)
+
+    # Add output types to collections.
+    for output_type in ReportDatatype:
+        controller.enable_output_type(output_type, DATASET_VARS_PATH)
+
+    return controller
+
+
+def development_output_config() -> 'OutputController':
+    """
+    Returns an OutputController instance with settings for development.
+
+    Development settings includes the basic collection structure as described
+    under empty_output_config, and no other collections. The PRIMARY_OUTPUT
+    collection and its subcollections have debug status reports enabled, and
+    output temperature change as their only variable.
+
+    No other variables are enabled. Further changes may be made to this
+    instance.
+
+    :return:
+        An output controller with development settings
     """
     controller = empty_output_config()
 
