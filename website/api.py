@@ -3,6 +3,7 @@ from website import app
 
 from os import path
 from pathlib import Path
+import shutil
 
 from core.configuration import from_json_string, RUN_ID
 from core.output_config import ReportDatatype, IMAGES_PATH,\
@@ -63,7 +64,7 @@ def config_options():
 def single_model_data(varname: str, time_seg: str):
     """
     Returns a response to an HTTP request for one image file produced by
-    a run of the Arrhenius model.
+    a run of the Arrhenius model, that are associated with variable varname.
 
     If the request is a POST request, a configuration dictionary is expected
     in the request body in the form of a JSON string. Assuming the
@@ -75,7 +76,7 @@ def single_model_data(varname: str, time_seg: str):
     variable varname under the relevant model run.
 
     :param varname:
-        The name of the variable the is overlaid on the map
+        The name of the variable that is overlaid on the map
     :param time_seg:
         A specifier for which month, season, or general time gradation
         the map should represent
@@ -108,3 +109,60 @@ def single_model_data(varname: str, time_seg: str):
     download_path = path.join(OUTPUT_FULL_PATH, run_id, varname)
     file_name = "_".join([run_id, varname, time_seg + ".png"])
     return send_from_directory(download_path, file_name), response_code
+
+
+@app.route('/model/<varname>', methods=['POST'])
+def multi_model_data(varname: str):
+    """
+    Returns a response to an HTTP request for all image files produced by
+    a run of the Arrhenius model, that are associated with variable varname.
+
+    If the request is a POST request, a configuration dictionary is expected
+    in the request body in the form of a JSON string. Assuming the
+    configuration options are valid, a zip archive will be attached to the
+    response that contains all image maps that are overlaid with variable
+    varname.
+
+    :param varname:
+        The name of the variable that is overlaid on the map
+    :return:
+        An HTTP response with requested image files attached, in a zip file
+    """
+    # Decode JSON string from request body.
+    config = from_json_string(request.data.decode("utf-8"))
+    run_id = str(config[RUN_ID])
+    response_code = 200
+
+    # This series of zip-file-related names makes the purpose of each
+    # more recognizable, but is not really necessary.
+    archive_name = "_".join([run_id, varname]) + ".zip"
+    archive_src = path.join(OUTPUT_FULL_PATH, run_id, varname)
+    archive_parent = path.join(OUTPUT_FULL_PATH, run_id)
+    archive_path = path.join(archive_parent, archive_name)
+
+    if not Path(OUTPUT_FULL_PATH, run_id, varname).exists():
+        # Model run on the provided configuration options has not been run;
+        # run it, producing the output directory as well as image files for
+        # the requested variable.
+        output_center = default_output_config()
+        output_center.enable_output_type(var_name_to_output_type[varname],
+                                         IMAGES_PATH)
+
+        # Use initial and final CO2 levels from request body if present, but
+        # replace with 1 and 2 if not specified.
+        init_co2 = float(config.get("co2", 1).get("from", 1))
+        final_co2 = float(config.get("co2", 2).get("to", 2))
+
+        run = ModelRun(config, output_center)
+        run.run_model(init_co2, final_co2)
+        response_code = 201
+
+    if not Path(archive_path).is_file():
+        # The zip file has not been made yet: zip the directory for
+        # image files in the requested variable.
+        shutil.make_archive(archive_path[:-4], 'zip', archive_src)
+
+    # Send the zip file attached to the HTTP response.
+    return send_from_directory(archive_parent, archive_name),\
+        response_code
+
