@@ -1,10 +1,12 @@
 from typing import Tuple, Dict, Callable
+from os import path
 from frozendict import frozendict
 
 import json
 from jsonschema import validate
 import xml.etree.ElementTree as ETree
 
+from data.resources import MAIN_PATH
 from data.provider import PROVIDERS
 from data.grid import GridDimensions
 
@@ -187,8 +189,8 @@ _transparency_weight_converter: Dict[str, WeightFunc] = {
 
 
 # Preloaded configuration files.
-JSON_DEFAULT = "../core/default_config.json"
-JSON_SCHEMA_FILE = "../core/config_schema.json"
+JSON_DEFAULT = path.join(MAIN_PATH, 'core', 'default_config.json')
+JSON_SCHEMA_FILE = path.join(MAIN_PATH, 'core', 'config_schema.json')
 
 json_schema = json.loads(open(JSON_SCHEMA_FILE, "r").read())
 
@@ -216,7 +218,6 @@ def freeze_dict(mutable_dict: Dict) -> frozendict:
             mutable_dict[k] = freeze_dict(v)
 
     return frozendict(mutable_dict)
-
 
 
 def from_json_string(json_data: str) -> Config:
