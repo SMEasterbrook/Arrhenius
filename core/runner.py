@@ -1,9 +1,10 @@
-from core.cell_operations import calculate_transparency
+from core.cell_operations import calculate_transparency_three
 
 from data.grid import GridDimensions, LatLongGrid
 from data.collector import ClimateDataCollector
 from data.display import ModelOutput
 import data.provider as pr
+import data.configuration as cnf
 
 import numpy as np
 from math import floor, log10
@@ -36,7 +37,7 @@ class ModelRunner:
             needed to run the model
         """
         self.config = config
-        self.output_controoler = output_controller
+        self.output_controller = output_controller
         self.grids = grids
 
     def run_model(self, init_co2: float,
@@ -74,18 +75,18 @@ class ModelRunner:
         init_temperature = grid_cell.get_temperature()
         relative_humidity = grid_cell.get_relative_humidity()
         albedo = grid_cell.get_albedo()
-        init_transparency = calculate_transparency(init_co2,
-                                                   init_temperature,
-                                                   relative_humidity)
+        init_transparency = calculate_transparency_three(init_co2,
+                                                         init_temperature,
+                                                         relative_humidity)
         k = self._calibrate_constant(init_temperature, albedo, init_transparency)
 
-        mid_transparency = calculate_transparency(new_co2,
-                                                  init_temperature,
-                                                  relative_humidity)
+        mid_transparency = calculate_transparency_three(new_co2,
+                                                        init_temperature,
+                                                        relative_humidity)
         mid_temperature = self._get_new_temperature(albedo, mid_transparency, k)
-        final_transparency = calculate_transparency(new_co2,
-                                                    mid_temperature,
-                                                    relative_humidity)
+        final_transparency = calculate_transparency_three(new_co2,
+                                                          mid_temperature,
+                                                          relative_humidity)
         final_temperature = self._get_new_temperature(albedo, final_transparency, k)
         return final_temperature
 
@@ -135,7 +136,12 @@ if __name__ == '__main__':
         .use_albedo_source(pr.landmask_albedo_data) \
         .get_gridded_data()
 
-    run_model(1, 2, grid_cells)
+    conf = cnf.DEFAULT_CONFIG
+    conf[cnf.CO2_WEIGHT] = cnf.WEIGHT_BY_PROXIMITY
+    conf[cnf.H2O_WEIGHT] = cnf.WEIGHT_BY_PROXIMITY
+
+    original_model = ModelRunner(conf, conf, grid_cells)
+    original_model.run_model(1, 2)
 
     writer = ModelOutput("arrhenius_x2", grid_cells)
     writer.write_output()
