@@ -4,9 +4,12 @@ from core.cell_operations import calculate_water_vapor
 class TestCalculateWaterVapor(unittest.TestCase):
 
     def test_same_output_input(self):
+        """
+        Test that the same input yields the same output
+        """
         # low temp
-        self.assertEqual(calculate_water_vapor(-262.15, 50),
-                         calculate_water_vapor(-262.15, 50))
+        self.assertEqual(calculate_water_vapor(262.15, 50),
+                         calculate_water_vapor(262.15, 50))
         # boundary humidity
         self.assertEqual(calculate_water_vapor(278.15, 0),
                          calculate_water_vapor(278.15, 0))
@@ -21,6 +24,10 @@ class TestCalculateWaterVapor(unittest.TestCase):
 
 
     def test_out_of_bounds(self):
+        """
+        Test that sending temperatures and relative humidities that are out of
+        bounds throw an error
+        """
         # test negative temperature
         self.assertRaises(AttributeError, calculate_water_vapor, -5, 10)
         self.assertRaises(AttributeError, calculate_water_vapor, -10, 0)
@@ -31,12 +38,16 @@ class TestCalculateWaterVapor(unittest.TestCase):
         self.assertRaises(AttributeError, calculate_water_vapor, 290.15, 105)
 
     def test_correct_output(self):
-        DEVIATION_FRACTION = .1
+        """
+        Test that output results only differ from actual results by a certain
+        percent of the correct value
+        """
+        DEVIATION_FRACTION = .167
         # test 0 humidity
-        self.assertEqual(calculate_water_vapor(257.15, 0), 0)
-        self.assertTrue(calculate_water_vapor(273.15, 0), 0)
-        self.assertTrue(calculate_water_vapor(285.15, 0), 0)
-        self.assertTrue(calculate_water_vapor(297.15, 0), 0)
+        self.assertEqual(calculate_water_vapor(257.15, 0), 0.0)
+        self.assertEqual(calculate_water_vapor(273.15, 0), 0.0)
+        self.assertEqual(calculate_water_vapor(285.15, 0), 0.0)
+        self.assertEqual(calculate_water_vapor(297.15, 0), 0.0)
         # low temperature, different humidities
         result = calculate_water_vapor(266.15, 10)
         self.assertTrue(abs(result - .03) <= DEVIATION_FRACTION * .03)
