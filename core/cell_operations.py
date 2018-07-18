@@ -1,7 +1,6 @@
 import numpy as np
 from data.configuration import WeightFunc
 
-
 # Constants for absolute humidity calculations
 CONST_A = 4.6543
 CONST_B = 1435.264
