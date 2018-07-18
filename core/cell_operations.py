@@ -161,24 +161,45 @@ def calculate_transparency_four(co2: float, temperature: float, relative_humidit
     benchmark = np.array([27.2, 34.5, 29.6, 26.4, 27.5, 24.5, 13.5, 21.4,
                           44.4, 59.0, 70, 75.5, 62.9, 56.4, 51.4, 39.1, 37.9,
                           36.3, 32.7, 29.8, 21.9])
-    original_intensities_benchmark = benchmark / .372
 
     water_vapor = calculate_water_vapor(temperature, relative_humidity)
-    remaining_intensities = 0
-    original_intensities = 0
+    total_transparencies = 0
 
     for angle in ANGLE_CORRECTIONS:
-        corrected_original_intensities = original_intensities_benchmark * np.cos((np.pi / 2) - angle)
-        original_intensities += corrected_original_intensities
+        corrected_original_intensities = benchmark * np.cos((np.pi / 2) - angle)
 
         corrected_co2 = co2 * (1 / np.sin(angle))
         corrected_water_vapor = water_vapor * (1 / np.sin(angle))
         co2_coefficients = CO2_COEFFICIENTS * corrected_co2
         h2o_coefficients = WATER_VAPOR_COEFFICIENTS * corrected_water_vapor
-        remaining_intensities += corrected_original_intensities * \
-                                 np.power(10, co2_coefficients) * np.power(10, h2o_coefficients)
+        remaining_intensities = corrected_original_intensities * np.power(10, co2_coefficients + h2o_coefficients)
+        total_transparencies += remaining_intensities.sum() / corrected_original_intensities.sum() \
+                                * np.sin(angle) * np.cos(angle)
+    return total_transparencies
 
-    return remaining_intensities.sum() / original_intensities.sum()
+
+def _vert_trans(co2: float, water_vapor: float, correction_factor: float) -> float:
+    benchmark = np.array([27.2, 34.5, 29.6, 26.4, 27.5, 24.5, 13.5, 21.4,
+                          44.4, 59.0, 70, 75.5, 62.9, 56.4, 51.4, 39.1, 37.9,
+                          36.3, 32.7, 29.8, 21.9]) * correction_factor
+    remaining_intensities = benchmark * np.power(10, co2 * CO2_COEFFICIENTS) \
+                            * np.power(10, water_vapor * WATER_VAPOR_COEFFICIENTS)
+
+    return remaining_intensities.sum() / RELATIVE_INTENSITIES.sum()
+
+
+def calculate_transparency_five(co2: float, temperature: float, relative_humidity: float) -> float:
+    h2o = calculate_water_vapor(temperature, relative_humidity)
+    total_transparency = 0
+    for angle in ANGLE_CORRECTIONS:
+        corrected_co2 = co2 * (1 / np.sin(angle))
+        corrected_h2o = h2o * (1 / np.sin(angle))
+
+        total_transparency += _vert_trans(corrected_co2, corrected_h2o, np.cos((np.pi / 2) - angle)) * np.cos(angle) * np.sin(angle)
+    return total_transparency
+
+
+
 
 
 
