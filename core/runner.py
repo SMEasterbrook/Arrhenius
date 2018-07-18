@@ -1,4 +1,4 @@
-from core.cell_operations import calculate_transparency
+from core.cell_operations import calculate_transparency_three
 
 from data.grid import GridDimensions, LatLongGrid
 from data.collector import ClimateDataCollector
@@ -84,20 +84,21 @@ class ModelRunner:
         init_temperature = grid_cell.get_temperature()
         relative_humidity = grid_cell.get_relative_humidity()
         albedo = grid_cell.get_albedo()
-        init_transparency = calculate_transparency(init_co2,
+
+        init_transparency = calculate_transparency_five(init_co2,
                                                    init_temperature,
                                                    relative_humidity,
                                                    co2_weight_func,
                                                    h2o_weight_func)
         k = calibrate_constant(init_temperature, albedo, init_transparency)
 
-        mid_transparency = calculate_transparency(new_co2,
+        mid_transparency = calculate_transparency_five(new_co2,
                                                   init_temperature,
                                                   relative_humidity,
                                                   co2_weight_func,
                                                   h2o_weight_func)
         mid_temperature = get_new_temperature(albedo, mid_transparency, k)
-        final_transparency = calculate_transparency(new_co2,
+        final_transparency = calculate_transparency_five(new_co2,
                                                     mid_temperature,
                                                     relative_humidity,
                                                     co2_weight_func,
@@ -154,7 +155,9 @@ if __name__ == '__main__':
     conf = cnf.DEFAULT_CONFIG
     conf[cnf.CO2_WEIGHT] = cnf.WEIGHT_BY_PROXIMITY
     conf[cnf.H2O_WEIGHT] = cnf.WEIGHT_BY_PROXIMITY
-    run_model(1, 2, grid_cells)
+
+    original_model = ModelRunner(conf, conf, grid_cells)
+    original_model.run_model(1, 2)
 
     writer = ModelOutput("arrhenius_x2", grid_cells)
     writer.write_output()
