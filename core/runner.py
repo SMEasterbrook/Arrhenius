@@ -1,4 +1,4 @@
-from core.cell_operations import calculate_transparency
+from core.cell_operations import calculate_transparency_three
 
 from data.grid import LatLongGrid, GridCell,\
     extract_multidimensional_grid_variable
@@ -166,20 +166,21 @@ class ModelRun:
         init_temperature = grid_cell.get_temperature() + 273.15
         relative_humidity = grid_cell.get_relative_humidity()
         albedo = grid_cell.get_albedo()
-        init_transparency = calculate_transparency(init_co2,
+
+        init_transparency = calculate_transparency_five(init_co2,
                                                    init_temperature,
                                                    relative_humidity,
                                                    co2_weight_func,
                                                    h2o_weight_func)
         k = calibrate_constant(init_temperature, albedo, init_transparency)
 
-        mid_transparency = calculate_transparency(new_co2,
+        mid_transparency = calculate_transparency_five(new_co2,
                                                   init_temperature,
                                                   relative_humidity,
                                                   co2_weight_func,
                                                   h2o_weight_func)
         mid_temperature = get_new_temperature(albedo, mid_transparency, k)
-        final_transparency = calculate_transparency(new_co2,
+        final_transparency = calculate_transparency_five(new_co2,
                                                     mid_temperature,
                                                     relative_humidity,
                                                     co2_weight_func,
