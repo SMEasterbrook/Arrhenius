@@ -173,7 +173,8 @@ def _naive_regrid(data_var: np.ndarray,
 
 
 def arrhenius_temperature_data(grid: 'GridDimensions'
-                               = GridDimensions((10, 20))) -> np.ndarray:
+                               = GridDimensions((10, 20)),
+                               year: int = None) -> np.ndarray:
     """
     A data provider returning temperature data from Arrhenius' original
     1895 dataset.
@@ -197,11 +198,12 @@ def arrhenius_temperature_data(grid: 'GridDimensions'
     # Regrid the humidity variable to the specified grid, if necessary.
     regridded_data = _regrid_netcdf_variable(data, grid, 3)
 
-    return regridded_data + 273.15
+    return regridded_data
 
 
 def berkeley_temperature_data(grid: 'GridDimensions'
-                              = GridDimensions((10, 20))) -> np.array:
+                              = GridDimensions((10, 20)),
+                              year: int = None) -> np.array:
     """
     A data provider returning temperature data from the Berkeley Earth
     temperature dataset. Includes 100% surface and ocean coverage in
@@ -221,7 +223,10 @@ def berkeley_temperature_data(grid: 'GridDimensions'
     """
     dataset = custom_readers.BerkeleyEarthTemperatureReader()
 
-    data = dataset.read_newest('temperature')[:]
+    if year is None:
+        data = dataset.read_newest('temperature')[:]
+    else:
+        data = dataset.collect_timed_data('temperature', year)
     clmt = dataset.collect_untimed_data('climatology')[:]
 
     # Translate data from the default, 1 by 1 grid to any specified grid.
@@ -243,11 +248,12 @@ def berkeley_temperature_data(grid: 'GridDimensions'
                 # of three gives significant performance increases.
                 data_by_lat[k] += clmt_by_lat[k]
 
-    return regridded_data + 273.15
+    return regridded_data
 
 
 def arrhenius_humidity_data(grid: 'GridDimensions'
-                              = GridDimensions((10, 20))) -> np.array:
+                              = GridDimensions((10, 20)),
+                            year: int = None) -> np.array:
     """
     A data provider returning relative humidity data from Arrhenius' original
     1895 dataset.
@@ -273,7 +279,8 @@ def arrhenius_humidity_data(grid: 'GridDimensions'
 
 
 def ncar_humidity_data(grid: 'GridDimensions'
-                       = GridDimensions((10, 20))) -> np.array:
+                       = GridDimensions((10, 20)),
+                       year: int = None) -> np.array:
     """
     A data provider returning (by default) 1-degree gridded relative
     humidity data at surface level. The data will be adjusted to a new
@@ -292,7 +299,10 @@ def ncar_humidity_data(grid: 'GridDimensions'
     """
     dataset = custom_readers.NCEPHumidityReader()
 
-    humidity = dataset.read_newest('shum')[:]
+    if year is None:
+        humidity = dataset.read_newest('shum')[:]
+    else:
+        humidity = dataset.collect_timed_data('shum', year)
     # Regrid the humidity variable to the specified grid, if necessary.
     regridded_humidity = _regrid_netcdf_variable(humidity, grid, 3)
 
@@ -388,3 +398,17 @@ def static_absorbance_data() -> float:
 
 
 REQUIRE_TEMP_DATA_INPUT = [landmask_albedo_data]
+
+PROVIDERS = {
+    "temperature": {
+        "arrhenius": arrhenius_temperature_data,
+        "berkeley": berkeley_temperature_data
+    },
+    "humidity": {
+        "arrhenius": arrhenius_humidity_data,
+        "ncar": ncar_humidity_data
+    },
+    "albedo": {
+        "landmask": landmask_albedo_data
+    }
+}

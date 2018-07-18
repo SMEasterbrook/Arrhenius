@@ -1,12 +1,10 @@
 from enum import Enum, auto
-from typing import Tuple, Dict, Callable, Optional
-
-from data.configuration import Config
-
+from typing import List, Tuple, Dict, Callable, Optional
+from threading import local
 
 # Type aliases
-OutputTypeHandler = Callable[[str, object], None]
-CollectionHandler = Callable[[str, Config, object]]
+OutputTypeHandler = Callable[..., None]
+CollectionHandler = Callable[..., None]
 
 
 class OutputConfig(Enum):
@@ -34,8 +32,6 @@ class ReportDatatype(OutputConfig):
     REPORT_TEMP_CHANGE = 'delta_t'
     # Grid cell relative humidity.
     REPORT_HUMIDITY = 'humidity'
-    # Grid cell humidity change over the model run.
-    REPORT_HUMIDITY_CHANGE = 'delta_hum'
     # Grid cell albedo.
     REPORT_ALBEDO = 'albedo'
 
@@ -81,6 +77,24 @@ class Debug(OutputConfig):
     PRINT_NOTICES = auto()
 
 
+def prefix_print(data: object,
+                 prefix: Optional[str] = None) -> None:
+    """
+    Print data in a formatted manner. Begin the line by printing the contents
+    of the second argument, followed by a colon, if the second argument is
+    provided and is not None. Otherwise just print the data.
+
+    :param data:
+        Data to be printed to console
+    :param prefix:
+        An optional string that may be printed before the data
+    """
+    if prefix is None:
+        print(data)
+    else:
+        print(prefix + ":", data)
+
+
 # Keys in collection dictionaries
 COLLECTION_SUBTYPES = "Contents"
 COLLECTION_HANDLERS = "Handlers"
@@ -104,25 +118,15 @@ class OutputController:
 
     Each collection or output type requires a handler function that is
     executed on any data that is associated with that collection or type.
-    For collections, the collection's substructure is passed into the handler
-    along with the data, so that the handler may know which output types were
-    registered in the collection.
+    For collections, additional information may be passed into the handler
+    so that the collection can know about its contents.
     """
-    def __init__(self: 'OutputController',
-                 model_run_title: str) -> None:
+    def __init__(self: 'OutputController') -> None:
         """
         Create a new OutputController. Initially, no output types or
         collections are registered in the controller.
-
-        A title parameter describes the model run, and should be unique and
-        informative. The title may be used for some output types.
-
-        :param model_run_title:
-            The title of the model run
         """
-        self._title = model_run_title
-        self._collections = {}
-        self._output_types = {}
+        self._output_tree = {}
 
     def _navigate_collection_path(self: 'OutputController',
                                   collection_path: Tuple[str, ...]) -> Dict:
@@ -134,7 +138,7 @@ class OutputController:
         :return:
             The collection defined by the path
         """
-        collection = self._collections
+        collection = self._output_tree
         for collection_name in collection_path:
             collection = collection[collection_name]
 
@@ -142,13 +146,20 @@ class OutputController:
 
     def enable_output_type(self: 'OutputController',
                            output_type: 'OutputConfig',
-                           handler: OutputTypeHandler = print) -> None:
+                           parent_collections: Tuple[str, ...] = (),
+                           handler: OutputTypeHandler = prefix_print) -> None:
         """
         Register an output type to allow its output to be processed.
 
+        The output type will by default be applied to the upper-most level
+        of the collection hierarchy, and will not be contained in any
+        collection. However, a collection can be specified by a path to the
+        collection to which the output type will be added, passed through the
+        parameter parent_collections.
+
         When any data is submitted for output that is associated with the
         given output type, it will by default be printed to the console.
-        If a handler is provided through the optional second argument,
+        If a handler is provided through the optional third argument,
         this handler will be invoked instead.
 
         Once an output type is enabled, it cannot be disabled. However, its
@@ -157,36 +168,76 @@ class OutputController:
 
         :param output_type:
             The type of output being registered
+        :param parent_collections:
+            A tuple of all the collections in which the output type is nested,
+            in order of appearance in the collections hierarchy.
         :param handler:
             A function that will be called on any output of that type
         """
-        self._output_types[output_type] = handler
+        parent = self._navigate_collection_path(parent_collections)
+        parent[output_type] = handler
+
+    def change_handler_if_enabled(self: 'OutputController',
+                                  output_type: 'OutputConfig',
+                                  parent_collections: Tuple[str, ...] = (),
+                                  handler: OutputTypeHandler = prefix_print)\
+            -> None:
+        """
+        Set the handler function for output_type to handler, but only if
+        output_type is already enabled.
+
+        By default, output_type will be looked for in the top level of the
+        collections hierarchy: that is, not in any collection at all. The
+        optional third argument specifies the path to a collection in which
+        to look for output_type and possibly change its handler. No other
+        collections will be affected, nor will the top level of the
+        collections hierarchy.
+
+        :param output_type:
+            The type of output being registered
+        :param parent_collections:
+            A tuple of all the collections in which the output type is nested,
+            in order of appearance in the collections hierarchy.
+        :param handler:
+            A function that will be called on any output of that type
+        """
+        parent_collection = self._navigate_collection_path(parent_collections)
+
+        if output_type in parent_collection:
+            parent_collection[output_type] = handler
 
     def submit_output(self: 'OutputController',
                       output_type: 'OutputConfig',
-                      data: object) -> None:
+                      data: object,
+                      *bonus_args) -> None:
         """
         Submit data for output, associated with one type of output as
         described by an OutputConfig subclass. The output will be ignored
         if the output type is not registered with this instance.
 
         If the output type is registered with this instance, its handler
-        function will be executed, taking this model run's title as its
-        first argument, and the data as its second argument.
+        function will be executed, taking the data parameter as its first
+        argument. Any further arguments after the data will be passed into
+        the handler function in the same order as they are passed into this
+        method.
 
         :param output_type:
             The type of output the data is associated with
         :param data:
             Data to be output
+        :param bonus_args:
+            A series of any other arguments that will be passed into the
+            handler function, in order of passing
         """
-        if output_type in self._output_types:
-            handler = self._output_types[output_type]
-            handler(self._title, data)
+        if output_type in self._output_tree:
+            handler = self._output_tree[output_type]
+            handler(data, *bonus_args)
 
     def register_collection(self: 'OutputController',
                             collection_name: str,
                             supercollections: Tuple[str, ...] = (),
-                            handler: Optional[CollectionHandler] = None) -> None:
+                            handler: Optional[CollectionHandler] = None)\
+            -> None:
         """
         Creates a new collection in the collection directory, without any
         output types registered in it.
@@ -230,47 +281,19 @@ class OutputController:
         if handler is not None:
             collection[COLLECTION_HANDLERS] = handler
 
-    def enable_collection_type(self: 'OutputController',
-                               collection_path: Tuple[str, ...],
-                               output_type: 'OutputConfig') -> None:
-        """
-        Record that a given output type is enabled within a collection.
-
-        This output type will be allowed when data is received that is
-        associated with the collection. However, how the data is output
-        depends on the collection's handler function, and may not be
-        specified for the output type alone.
-
-        :param collection_path:
-            A path to the collection in question through its ancestors
-        :param output_type:
-            The type of output being registered
-        """
-        collection = self._navigate_collection_path(collection_path)
-
-        # Accumulate output types in a set. The set may not be present when
-        # the first output type is registered, and may need to be created.
-        if COLLECTION_SUBTYPES not in collection:
-            collection[COLLECTION_SUBTYPES] = {output_type}
-        else:
-            collection[COLLECTION_SUBTYPES].add(output_type)
-
     def submit_collection_output(self: 'OutputController',
                                  collection_path: Tuple[str, ...],
-                                 data: object) -> None:
+                                 data: object,
+                                 *bonus_args) -> None:
         """
         Submit data for output, associated with the collection described by
         the collection path argument.
 
         This operation is only valid if a handler function has been registered
         with the collection in question. If so, this handler is invoked with
-        the model run's title as its first argument, a dict containing the
-        collection's substructure as its second argument, and the data as its
-        third argument.
-
-        The second argument, the collection structure, contains information
-        such as child collections, and a set of output types that are enabled
-        within the collection.
+        the provided data as its first argument. Any further arguments after
+        the data will be passed into the handler function in the same order
+        by which they are passed into this method.
 
         Precondition:
             A handler has been registered with this collection.
@@ -279,10 +302,74 @@ class OutputController:
             A path to the collection in question through its ancestors
         :param data:
             Data to be output
+        :param bonus_args:
+            A series of any other arguments that will be passed into the
+            handler function, in order of passing
         """
         collection = self._navigate_collection_path(collection_path)
-        handler = collection[COLLECTION_HANDLERS]
-        handler(self._title, collection, data)
+
+        if COLLECTION_HANDLERS in collection:
+            handler = collection[COLLECTION_HANDLERS]
+
+            parent_output_center = globals.output
+            subcollection_output_center = _output_controller_from_dict(collection)
+            globals.output = subcollection_output_center
+
+            handler(data, *bonus_args)
+
+            globals.output = parent_output_center
+        else:
+            raise LookupError("No handler function loaded for collection"
+                              "{}".format(collection_path))
+
+
+def _output_controller_from_dict(basis: Dict) -> 'OutputController':
+    """
+    Return an output controller configured based on the dictionary basis,
+    which is structured like the internal representation of a collection
+    within an output controller.
+
+    Can generate an output controller to handle a collection within another.
+
+    :param basis:
+        A dictionary specifying collection structure
+    :return:
+        An output controller containing the above collection hierarchy
+    """
+    controller = OutputController()
+    path = []
+
+    def _add_to_output_controller(collection: Dict) -> None:
+        """
+        Enter the contents of collection, which is either a collection
+        or a whole hierarchy of collections, into the controller object
+        in the outer scope.
+
+        :param collection:
+            A dictionary representation of an output collection
+        """
+        for k, v in collection.items():
+            if isinstance(v, dict):
+                # v is a subcollection.
+                # Register k as the name of the collection, with the
+                # appropriate handler function.
+                if COLLECTION_HANDLERS in v:
+                    controller.register_collection(k, tuple(path),
+                                                   v[COLLECTION_HANDLERS])
+                else:
+                    controller.register_collection(k, tuple(path))
+
+                # Add the collection's name to the path and recursively add
+                # the collection's contents to the output controller.
+                path.append(k)
+                _add_to_output_controller(v)
+                path.pop()
+            else:
+                # Simply register the handler function v with the output type.
+                controller.enable_output_type(k, tuple(path), v)
+
+    _add_to_output_controller(basis)
+    return controller
 
 
 # Standard collection names.
@@ -296,7 +383,7 @@ DATASET_VARS_PATH = (PRIMARY_OUTPUT, DATASET_VARS)
 IMAGES_PATH = (PRIMARY_OUTPUT, IMAGES)
 
 
-def empty_output_config(title: str) -> 'OutputController':
+def empty_output_config() -> 'OutputController':
     """
     Returns a OutputController instance with basic collection structure
     initialized, but without any output types or handlers added.
@@ -313,12 +400,10 @@ def empty_output_config(title: str) -> 'OutputController':
 
     Further changes or additions may be made to this instance.
 
-    :param title:
-        The name of this model run
     :return:
         An empty output controller, with basic collection structure
     """
-    controller = OutputController(title)
+    controller = OutputController()
 
     # Create empty collections.
     controller.register_collection(PRIMARY_OUTPUT)
@@ -328,35 +413,94 @@ def empty_output_config(title: str) -> 'OutputController':
     return controller
 
 
-def default_output_config(title: str) -> 'OutputController':
+def default_output_config() -> 'OutputController':
     """
     Returns an OutputController instance with default settings.
 
     Default settings includes the basic collection structure as described
-    under empty_output_config, and no other collections. The PRIMARY_OUTPUT
-    collection has debug status reports enabled. Both of its children have
-    temperature change enabled, and no other variables.
+    under empty_output_config, and no other collections. The dataset is
+    set to output all variables, while no images will be produced.
+    No console prints are enabled. This is intended for deployment purposes.
 
     No other variables are enabled. Further changes may be made to this
     instance.
 
-    :param title:
-        The name of this model run
     :return:
         An output controller with default settings
     """
-    controller = empty_output_config(title)
+    controller = empty_output_config()
 
     # Set primary output handler function.
     # Placeholder is print until a proper output function is developed.
     controller.register_collection(PRIMARY_OUTPUT, handler=print)
 
     # Add output types to collections.
-    controller.enable_collection_type(PRIMARY_OUTPUT_PATH,
-                                      Debug.PRINT_NOTICES)
-    controller.enable_collection_type(DATASET_VARS_PATH,
-                                      ReportDatatype.REPORT_TEMP_CHANGE)
-    controller.enable_collection_type(IMAGES_PATH,
-                                      ReportDatatype.REPORT_TEMP_CHANGE)
+    for output_type in ReportDatatype:
+        controller.enable_output_type(output_type, DATASET_VARS_PATH)
 
     return controller
+
+
+def development_output_config() -> 'OutputController':
+    """
+    Returns an OutputController instance with settings for development.
+
+    Development settings includes the basic collection structure as described
+    under empty_output_config, and no other collections. The PRIMARY_OUTPUT
+    collection and its subcollections have debug status reports enabled, and
+    output temperature change as their only variable.
+
+    No other variables are enabled. Further changes may be made to this
+    instance.
+
+    :return:
+        An output controller with development settings
+    """
+    controller = empty_output_config()
+
+    # Set primary output handler function.
+    # Placeholder is print until a proper output function is developed.
+    controller.register_collection(PRIMARY_OUTPUT, handler=print)
+
+    # Add output types to collections.
+    controller.enable_output_type(Debug.PRINT_NOTICES, PRIMARY_OUTPUT_PATH)
+    controller.enable_output_type(ReportDatatype.REPORT_TEMP_CHANGE,
+                                  DATASET_VARS_PATH)
+    controller.enable_output_type(Debug.PRINT_NOTICES,
+                                  DATASET_VARS_PATH)
+    controller.enable_output_type(ReportDatatype.REPORT_TEMP_CHANGE,
+                                  IMAGES_PATH)
+    controller.enable_output_type(Debug.PRINT_NOTICES,
+                                  IMAGES_PATH)
+
+    return controller
+
+
+# Keys into thread-specific variables dictionary
+OUTPUT = "Out_Center"
+
+# Dictionary of thread-specific variables, accessible at global scope.
+# Set up initial state.
+globals = local()
+globals.output = default_output_config()
+
+
+def global_output_center() -> 'OutputController':
+    """
+    Returns the active thread-specific output controller object.
+
+    :return:
+        The global output controller
+    """
+    return globals.output
+
+
+def set_output_center(output_center: 'OutputController') -> None:
+    """
+    Replace the active thread-specific output controller with output_center.
+    Other threads will not see the change.
+
+    :param output_center:
+        A new output center to be used by this thread
+    """
+    globals.output = output_center

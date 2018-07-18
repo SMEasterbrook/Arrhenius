@@ -16,7 +16,11 @@ formats, and storing gridded data in a way that allows for efficient retrieval.
 """
 
 
-def convert_grid_format(grid: Tuple[int, int]) -> Tuple[int, int]:
+# Type aliases.
+TupleGridDims = Tuple[Union[int, float], Union[int, float]]
+
+
+def convert_grid_format(grid: TupleGridDims) -> TupleGridDims:
     """
     Converts between two tuple-based representations of grid dimensions:
     one in which each number in the tuple represents the number of latitude/
@@ -30,24 +34,17 @@ def convert_grid_format(grid: Tuple[int, int]) -> Tuple[int, int]:
 
     Preconditions:
         grid is a tuple with two integer elements.
-        grid[0] divides evenly into 180 (forms an integer number of latitude
-            bands).
-        grid[1] divides evenly into 360 (forms an integer number of longitude
-            bands).
 
-    :param grid: A set of tuple-based grid dimensions
-    :return: A new set of tuple-based grid dimensions in the other format
-            (see above)
+    :param grid:
+        A set of tuple-based grid dimensions
+    :return:
+        A new set of tuple-based grid dimensions in the other format
+        (see above)
     """
-    if 180 % grid[0] != 0:
-        raise ValueError("Latitude width must be a divisor of 180")
-    elif 360 % grid[1] != 0:
-        raise ValueError("Longitude width must be a divisor of 360")
-    else:
-        new_lat = int(180 / grid[0])
-        new_lon = int(360 / grid[1])
+    new_lat = 180 / grid[0]
+    new_lon = 360 / grid[1]
 
-        return new_lat, new_lon
+    return new_lat, new_lon
 
 
 def extract_multidimensional_grid_variable(grids: Union[list, 'LatLongGrid'],
@@ -114,7 +111,7 @@ class GridDimensions:
     dimensions of a grid.
     """
     def __init__(self: 'GridDimensions',
-                 dims: Tuple[int, int],
+                 dims: TupleGridDims,
                  dims_form: str = "width") -> None:
         """
         Initialize a new set of grid dimensions based on the tuple parameter.
@@ -144,23 +141,52 @@ class GridDimensions:
         elif len(dims) != 2:
             raise ValueError("dims must be a tuple of exactly 2 elements"
                              "(is length {})".format(len(dims)))
-        elif type(dims[0]) != int:
-            raise TypeError("All elements of dims must be integers"
+        elif type(dims[0]) not in {float, int}:
+            raise TypeError("All elements of dims must be numeric"
                             "(element 0 is type {})".format(type(dims[0])))
-        elif type(dims[1]) != int:
-            raise TypeError("All elements of dims must be integers"
+        elif type(dims[1]) not in {float, int}:
+            raise TypeError("All elements of dims must be numeric"
                             "(element 1 is type {}".format(type(dims[1])))
+        elif dims[0] <= 0:
+            raise ValueError("Latitude dimension value must be positive"
+                             "(is {})".format(dims[0]))
+        elif dims[1] <= 0:
+            raise ValueError("Longitude dimension value must be positive"
+                             "(is {})".format(dims[0]))
 
-        # Integrity checks for dims_form
+        # Integrity checks on dims that depend on the value of dims_form
         if dims_form == "width":
-            self._grid_by_count = convert_grid_format(dims)
+            if dims[0] > 180:
+                raise ValueError("Latitude width exceeds maximum of 180"
+                                 "(is {})".format(dims[0]))
+            elif dims[1] > 360:
+                raise ValueError("Longitude width exceeds maximum of 360"
+                                 "(is {})".format(dims[1]))
+            elif 180 % dims[0] != 0:
+                raise ValueError("Latitude dimension does not produce"
+                                 "integral number of grid cells"
+                                 "(produces {})".format(180 / dims[0]))
+            elif 360 % dims[1] != 0:
+                raise ValueError("Longitude dimension does not produce"
+                                 "integral number of grid cells"
+                                 "(produces {})".format(360 / dims[1]))
         elif dims_form == "count":
-            self._grid_by_count = dims
+            # Counts may only be integral
+            if dims[0] % 1 != 0:
+                raise ValueError("Number of latitude cells must be integral"
+                                 "(is {})".format(dims[0]))
+            elif dims[1] % 1 != 0:
+                raise ValueError("Number of longitude cells must be integral"
+                                 "(is {})".format(dims[1]))
         else:
             raise ValueError("dims_form must be either 'width' or 'count'"
                              "(is {})".format(dims_form))
 
-    def dims_by_width(self: 'GridDimensions') -> Tuple[int, int]:
+        self._grid_by_count = convert_grid_format(dims)\
+            if dims_form == "width"\
+            else dims
+
+    def dims_by_width(self: 'GridDimensions') -> TupleGridDims:
         """
         Return a representation of the grid dimensions in the form of a
         two-element tuple, where the elements represent the width and height
@@ -182,7 +208,11 @@ class GridDimensions:
             The grid dimensions in terms of number of cells required to
             circle the globe
         """
-        return self._grid_by_count
+        grid_by_count = self._grid_by_count
+        int_lat = int(self._grid_by_count[0])
+        int_lon = int(self._grid_by_count[1])
+
+        return int_lat, int_lon
 
 
 class GridCell:
@@ -205,19 +235,19 @@ class GridCell:
         if they are required.
 
         Preconditions:
-            0 <= temp
+            -273 <= temp
             0.0 <= r_hum <= 100.0
             0.0 <= albedo <= 1.0
 
         :param temp:
-            Average temperature, in Kelvin, within the grid cell
+            Average temperature, in degrees Celsius, within the grid cell
         :param r_hum:
             Average relative humidity within the grid cell, in percent
         :param albedo:
             Average surface albedo within the grid cell
         """
-        if temp < 0:
-            raise ValueError("Value for temperature must be greater than 0"
+        if temp < -273:
+            raise ValueError("Value for temperature must be greater than -273"
                              "(is {})".format(temp))
         elif r_hum < 0 or r_hum > 100:
             raise ValueError("Value for relative humidity must fall in"
@@ -260,9 +290,9 @@ class GridCell:
             -273.0 <= new_temp
 
         :param new_temp:
-            The new value, in Kelvin, for temperature in this cell
+            The new value, in degrees Celsius, for temperature in this cell
         """
-        if new_temp < 0:
+        if new_temp < -273:
             raise ValueError("Value for temperature must be greater than -273"
                              "(is {})".format(new_temp))
 
@@ -407,71 +437,71 @@ class LatLongGrid:
             return GridDimensions(grid_by_count, "count")
 
     def set_coord(self: 'LatLongGrid',
-                  x: int,
-                  y: int,
+                  lat: int,
+                  lon: int,
                   val) -> None:
         """
-        Set a new value for the cell in the grid that is x cells from the left
-        and y cells from the bottom of the grid.
+        Set a new value for the cell in the grid that is lon cells from the left
+        and lat cells from the top of the grid.
 
         Preconditions:
-            0 <= x < width of the grid
-            0 <= y < height of the grid
+            0 <= lat < height of the grid
+            0 <= lon < width of the grid
 
-        :param x:
+        :param lat:
+            The distance of the cell from the top of the grid
+        :param lon:
             The distance of the cell from the leftmost edge of the grid
-        :param y:
-            The distance of the cell from the bottom of the grid
         :param val:
             The new value for the grid cell at that position
         """
-        if x < 0 or x > len(self._data[0]):
-            raise ValueError("X coordinate must be within the boundaries ({},"
-                             "{}), is {}".format(0, (len(self._data[0])), x))
-        elif y < 0 or y > len(self._data):
-            raise ValueError("Y coordinate must be within the boundaries ({},"
-                             "{}), is {}".format(0, (len(self._data)), y))
+        if lat < 0 or lat >= len(self._data):
+            raise IndexError("Latitude coordinate must be within boundaries"
+                             "{}, is {}".format(0, (len(self._data)), lat))
+        elif lon < 0 or lon >= len(self._data[0]):
+            raise IndexError("Longitude coordinate must be within boundaries"
+                             "{}, is {}".format(0, (len(self._data[0])), lon))
 
         # Cache the most recently accessed row to prevent excessive list/array
         # indexing in subsequent calls.
-        if self._most_recent_row_num != y:
-            self._most_recent_row_num = y
-            self._most_recent_row = self._data[y]
+        if self._most_recent_row_num != lat:
+            self._most_recent_row_num = lat
+            self._most_recent_row = self._data[lat]
 
-        self._most_recent_row[x] = val
+        self._most_recent_row[lon] = val
 
     def get_coord(self: 'LatLongGrid',
-                  x: int,
-                  y: int) -> GridCell:
+                  lat: int,
+                  lon: int) -> GridCell:
         """
-        Returns the grid cell at the position that is x cells from the left
-        and y cells from the bottom of the grid.
+        Returns the grid cell at the position that is lon cells from the left
+        and lat cells from the top of the grid.
 
         Preconditions:
-            0 <= x < width of the grid
-            0 <= y < height of the grid
+            0 <= lat < height of the grid
+            0 <= lon < width of the grid
 
-        :param x:
+        :param lat:
+            The distance of the cell from the top of the grid
+        :param lon:
             The distance of the cell from the leftmost edge of the grid
-        :param y:
-            The distance of the cell from the bottom of the grid
         :return:
             The grid cell located at that position
         """
-        if x < 0 or x > len(self._data[0]):
-            raise ValueError("X coordinate must be within the boundaries {},"
-                             "is {}".format(0, (len(self._data[0])), x))
-        elif y < 0 or y > len(self._data):
-            raise ValueError("Y coordinate must be within the boundaries {},"
-                             "is {}".format(0, (len(self._data)), y))
+        if lat < 0 or lat >= len(self._data):
+            raise IndexError("Latitude coordinate must be within boundaries"
+                             "{}, is {}".format(0, (len(self._data)), lat))
+        elif lon < 0 or lon >= len(self._data[0]):
+            raise IndexError("Longitude coordinate must be within boundaries"
+                             "{}, is {}".format(0, (len(self._data[0])), lon))
 
         # Cache the most recently accessed row to prevent excessive list/array
         # indexing in subsequent calls.
-        if self._most_recent_row_num != y:
-            self._most_recent_row_num = y
-            self._most_recent_row = self._data[y]
+        if self._most_recent_row_num != lat:
+            self._most_recent_row_num = lat
+            self._most_recent_row = self._data[lat]
 
-        return self._most_recent_row[x]
+        return self._most_recent_row[lon]
 
     def extract_datapoint(self: 'LatLongGrid',
                           datapoint: str) -> np.ndarray:
@@ -507,3 +537,62 @@ class LatLongGrid:
             converted_data.append(converted_row)
 
         return np.array(converted_data)
+
+    def latitude_bands(self: 'LatLongGrid') -> 'LatLongGrid':
+        """
+        Average out all values within each latitudinal band in the grid,
+        returning a new grid with those values.
+
+        The new grid will have the same number of latitude gradations as
+        the original. However, it will have only a single column of longitude.
+
+        Temperature, humidity, and albedo in each band are the means of the
+        respective variables in each grid cell in the row. Temperature change
+        is given by the difference between average final temperature and
+        average initial temperature over each cell in the band.
+
+        :return:
+            A grid equivalent to this one, with one column of latitude.
+        """
+        new_cells = []
+
+        for lat_index in range(len(self._data)):
+            # Accumulator variables for initial temperature, final temperature
+            # and all other variables that the new latitude band will inherit.
+            pre_temp_sum = 0
+            post_temp_sum = 0
+            humidity_sum = 0
+            albedo_sum = 0
+
+            # Do no count null cells or those with missing values.
+            num_valid_cells = 0
+
+            for cell in self._data[lat_index]:
+                if cell is not None:
+                    # Add the current cell's variables to accumulators.
+                    post_temp_sum += cell.get_temperature()
+                    pre_temp_sum += cell.get_temperature()\
+                        - cell.get_temperature_change()
+                    humidity_sum += cell.get_relative_humidity()
+                    albedo_sum += cell.get_albedo()
+
+                    num_valid_cells += 1
+
+            # Protect from zero-division errors by filling a null value into
+            # the grid where no valid cells existed in the row.
+            if num_valid_cells > 0:
+                # Calculate means for every variable, and load into a
+                # grid cell.
+                combined_cell = GridCell(pre_temp_sum / num_valid_cells,
+                                           humidity_sum / num_valid_cells,
+                                           albedo_sum / num_valid_cells)
+
+                # Set the grid cell's temperature from its initial mean to
+                # the final mean, allowing the grid cell to record the
+                # temperature change.
+                combined_cell.set_temperature(post_temp_sum / num_valid_cells)
+                new_cells.append([combined_cell])
+            else:
+                new_cells.append([None])
+
+        return LatLongGrid(new_cells)
