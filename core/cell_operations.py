@@ -1,4 +1,6 @@
 import numpy as np
+from data.configuration import WeightFunc
+
 
 # Constants for absolute humidity calculations
 CONST_A = 4.6543
@@ -82,35 +84,62 @@ MEAN_PATH = {
 
 def calculate_transparency(co2: float,
                            temperature: float,
-                           relative_humidity: float) -> float:
+                           relative_humidity: float,
+                           co2_weight_func: WeightFunc,
+                           h2o_weight_func: WeightFunc) -> float:
     """
     Calculate the transparency for a grid cell with the given data.
 
     :param co2:
         The amount of CO2 in the atmosphere
-
     :param temperature:
         The average temperature of the grid cell
     :param relative_humidity:
         The relative humidity of the grid cell
-
+    :param co2_weight_func:
+        Function that determine the weights of low and high estimations
+        for CO2 transparency
+    :param h2o_weight_func:
+        Function that determine the weights of low and high estimations
+        for H2O transparency
     :return:
         The B value corresponding to a grid cell with the given conditions
     """
-    water_vapor = calculate_water_vapor(temperature, relative_humidity)
-    p = calculate_mean_path(co2, water_vapor)
+    h2o = calculate_water_vapor(temperature, relative_humidity)
+    p = calculate_mean_path(co2, h2o)
 
     # find transparency percent from preprogrammed table
     keys = list(TRANSPARENCY.keys())
-    closest_co2 = keys[0][0]
-    closest_h2o = keys[0][0]
-    for key in keys:
-        if key[0] < p * co2:
-            closest_co2 = key[0]
-        if abs(p * water_vapor - key[1]) < abs(p * water_vapor - closest_h2o):
-            closest_h2o = key[1]
+    lower_co2_ind = -1
+    lower_h2o_ind = -1
+    for i in range(len(keys)):
+        if keys[i][0] < p * co2:
+            lower_co2_ind = i
+        if keys[i][1] < p * h2o:
+            lower_h2o_ind = i
 
-    transparency = TRANSPARENCY.get((closest_co2, closest_h2o))
+    lower_co2 = keys[max(0, lower_co2_ind)][0]
+    upper_co2 = keys[min(len(keys) - 1, lower_co2_ind + 1)][0]
+
+    lower_h2o = keys[max(0, lower_h2o_ind)][1]
+    upper_h2o = keys[min(len(keys) - 1, lower_h2o_ind + 1)][1]
+
+    lower_co2_weight, upper_co2_weight = \
+        co2_weight_func(lower_co2, upper_co2, p * co2)
+
+    lower_h2o_weight, upper_h2o_weight = \
+        h2o_weight_func(lower_h2o, upper_h2o, p * h2o)
+
+    co2_lower_h2o_lower = TRANSPARENCY.get((lower_co2, lower_h2o))
+    co2_upper_h2o_lower = TRANSPARENCY.get((upper_co2, lower_h2o))
+    co2_lower_h2o_upper = TRANSPARENCY.get((lower_co2, upper_h2o))
+    co2_upper_h2o_upper = TRANSPARENCY.get((upper_co2, upper_h2o))
+
+    transparency = co2_lower_h2o_lower * (lower_co2_weight * lower_h2o_weight)\
+        + co2_lower_h2o_upper * (lower_co2_weight * upper_h2o_weight)\
+        + co2_upper_h2o_lower * (upper_co2_weight * lower_h2o_weight)\
+        + co2_upper_h2o_upper * (upper_co2_weight * upper_h2o_weight)
+
     return transparency
 
 
@@ -197,10 +226,6 @@ def calculate_transparency_five(co2: float, temperature: float, relative_humidit
 
         total_transparency += _vert_trans(corrected_co2, corrected_h2o, np.cos((np.pi / 2) - angle)) * np.cos(angle) * np.sin(angle)
     return total_transparency
-
-
-
-
 
 
 def calculate_water_vapor(temperature: float,
