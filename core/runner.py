@@ -1,4 +1,4 @@
-from core.cell_operations import calculate_transparency_three
+from core.cell_operations import calculate_transparency_five
 
 from data.grid import LatLongGrid, GridCell,\
     extract_multidimensional_grid_variable
