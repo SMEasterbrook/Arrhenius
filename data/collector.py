@@ -121,7 +121,8 @@ class ClimateDataCollector:
         self._absorbance_data = None
         return self
 
-    def get_gridded_data(self: CDC) -> List['LatLongGrid']:
+    def get_gridded_data(self: CDC,
+                         year: int = None) -> List['LatLongGrid']:
         """
         Combines and returns all gridded surface data, including surface
         temperature, relative humidity, and surface albedo. The data is
@@ -145,8 +146,8 @@ class ClimateDataCollector:
         elif self._albedo_source is None:
             raise PermissionError("No albedo provider function selected")
 
-        temp_data = self._temp_source(self._grid)
-        r_hum_data = self._humidity_source(self._grid)
+        temp_data = self._temp_source(self._grid, year)
+        r_hum_data = self._humidity_source(self._grid, year)
 
         if len(temp_data) != len(r_hum_data):
             raise ValueError("Temperature and humidity must have the same"
