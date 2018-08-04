@@ -143,27 +143,43 @@ def calculate_transparency(co2: float,
     return transparency
 
 
-def calculate_modern_transparency(co2: float, temp: float, height: float, dist: float) -> float:
+def calculate_modern_transparency(co2: float, temp: float,
+                                  relative_humidity: float, height: float,
+                                  dist: float) -> float:
     """
+    Calculate the transparency of the atmosphere using LOWTRAN, a modern
+    climate calculation model and tool.
 
     :param co2:
         The co2 in the atmosphere at the chosen height in ppmv
     :param temp:
-        The temperature of the atmosphere at the chosen height in K
+        The temperature of the atmosphere at the chosen height in Kelvin
+    :param relative_humidity:
+        The relative humidity of the atmosphere at the chosen height
     :param height:
         The altitude at which the radiation is traveling, in km
     :param dist:
         The distance the radiation travels through the atmosphere, in km
-
-    Water vapor (wmol[0]) units are ppmm (I think)
     """
+    h2o = calculate_water_vapor(temp, relative_humidity)
+    p = calculate_mean_path(co2, h2o)
+
+    # convert to ppmv
+    adjusted_co2 = co2 * p * 300
+
+    # convert to ppmv from g/m^3
+    # adjusted_h2o = h2o * p * 10 * 1000 * .082057338 * temp / 18.01528
+
+    # Dufresne's h2o adjustment
+    adjusted_h2o = h2o * p * 20
+
     parameters = {'h1': height,
                   'zmdl': height,
                   'range_km': dist,
                   'wlnmlim': (200, 20000),
                   'p': 949.0,
                   't': temp,
-                  'wmol': [93.96, co2 * 300, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                  'wmol': [adjusted_h2o, adjusted_co2, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
                   }
     result = userhoriztrans(parameters)
     return float(result['transmission'].mean())

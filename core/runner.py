@@ -260,17 +260,20 @@ class ModelRun:
 
         init_transparency = calculate_modern_transparency(init_co2,
                                                           init_temperature,
+                                                          relative_humidity,
                                                           ATMOSPHERE_HEIGHT / 2,
                                                           ATMOSPHERE_HEIGHT)
         k = calibrate_constant(init_temperature, albedo, init_transparency)
 
         mid_transparency = calculate_modern_transparency(new_co2,
                                                          init_temperature,
+                                                         relative_humidity,
                                                          ATMOSPHERE_HEIGHT / 2,
                                                          ATMOSPHERE_HEIGHT)
         mid_temperature = get_new_temperature(albedo, mid_transparency, k)
         final_transparency = calculate_modern_transparency(new_co2,
                                                            mid_temperature,
+                                                           relative_humidity,
                                                            ATMOSPHERE_HEIGHT / 2,
                                                            ATMOSPHERE_HEIGHT)
         final_temperature = get_new_temperature(albedo, final_transparency, k)
@@ -365,4 +368,4 @@ if __name__ == '__main__':
     out_cont.enable_output_type(out_cnf.AccuracyMetrics.TEMP_DELTA_VARIANCE)
 
     model = ModelRun(conf, out_cont)
-    grids = model.run_model(1, 2)
+    grids = model.run_model(1, 3)
