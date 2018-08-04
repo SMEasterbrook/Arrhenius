@@ -1,5 +1,6 @@
 import numpy as np
-from data.configuration import WeightFunc
+from core.configuration import WeightFunc
+from lowtran import userhoriztrans
 
 # Constants for absolute humidity calculations
 CONST_A = 4.6543
@@ -142,89 +143,46 @@ def calculate_transparency(co2: float,
     return transparency
 
 
-def calculate_transparency_two(co2: float,
-                               temperature: float,
-                               relative_humidity: float) -> float:
-    water_vapor = calculate_water_vapor(temperature, relative_humidity)
-    remaining_intensities = 0
-    total_intensity = TOTAL_INTENSITY * ANGLE_CORRECTIONS.size
+def calculate_modern_transparency(co2: float, temp: float,
+                                  relative_humidity: float, height: float,
+                                  dist: float) -> float:
+    """
+    Calculate the transparency of the atmosphere using LOWTRAN, a modern
+    climate calculation model and tool.
 
-    for angle_correction in ANGLE_CORRECTIONS:
-        corrected_co2 = co2 * (1 / np.sin(angle_correction))
-        corrected_water_vapor = water_vapor * (1 / np.sin(angle_correction))
-        corrected_rel_intensities = RELATIVE_INTENSITIES * np.cos((np.pi / 2) - angle_correction)
-        total_absorb_coefficients = CO2_COEFFICIENTS * corrected_co2 + \
-                                    WATER_VAPOR_COEFFICIENTS * \
-                                    corrected_water_vapor
-        co2_coefficients = CO2_COEFFICIENTS * corrected_co2
-        h2o_coefficients = WATER_VAPOR_COEFFICIENTS * corrected_water_vapor
+    :param co2:
+        The co2 in the atmosphere at the chosen height in ppmv
+    :param temp:
+        The temperature of the atmosphere at the chosen height in Kelvin
+    :param relative_humidity:
+        The relative humidity of the atmosphere at the chosen height
+    :param height:
+        The altitude at which the radiation is traveling, in km
+    :param dist:
+        The distance the radiation travels through the atmosphere, in km
+    """
+    h2o = calculate_water_vapor(temp, relative_humidity)
+    p = calculate_mean_path(co2, h2o)
 
-        remaining_intensities += corrected_rel_intensities * \
-                     np.power(10, co2_coefficients) * np.power(10, h2o_coefficients)
+    # convert to ppmv
+    adjusted_co2 = co2 * p * 300
 
-    return remaining_intensities.sum() / total_intensity
+    # convert to ppmv from g/m^3
+    # adjusted_h2o = h2o * p * 10 * 1000 * .082057338 * temp / 18.01528
 
+    # Dufresne's h2o adjustment
+    adjusted_h2o = h2o * p * 20
 
-def calculate_transparency_three(co2: float, temperature: float,
-                                 relative_humidity: float):
-    benchmark = np.array([27.2, 34.5, 29.6, 26.4, 27.5, 24.5, 13.5, 21.4,
-                          44.4, 59.0, 70, 75.5, 62.9, 56.4, 51.4, 39.1, 37.9,
-                          36.3, 32.7, 29.8, 21.9])
-    water_vapor = calculate_water_vapor(temperature, relative_humidity)
-    remaining_intensities = 0
-
-    for angle in ANGLE_CORRECTIONS:
-        corrected_co2 = co2 * (1 / np.sin(angle))
-        corrected_water_vapor = water_vapor * (1 / np.sin(angle))
-        absorption_differences = (corrected_co2 * CO2_COEFFICIENTS) \
-                                 + (corrected_water_vapor * WATER_VAPOR_COEFFICIENTS) \
-                                 - CO2_COEFFICIENTS \
-                                 - (.3 * WATER_VAPOR_COEFFICIENTS)
-        ratios = np.power(10, absorption_differences)
-        remaining_intensities += (benchmark * ratios)
-    return remaining_intensities.sum() / (benchmark.sum() / .372 *ANGLE_CORRECTIONS.size)
-
-
-def calculate_transparency_four(co2: float, temperature: float, relative_humidity: float):
-    benchmark = np.array([27.2, 34.5, 29.6, 26.4, 27.5, 24.5, 13.5, 21.4,
-                          44.4, 59.0, 70, 75.5, 62.9, 56.4, 51.4, 39.1, 37.9,
-                          36.3, 32.7, 29.8, 21.9])
-
-    water_vapor = calculate_water_vapor(temperature, relative_humidity)
-    total_transparencies = 0
-
-    for angle in ANGLE_CORRECTIONS:
-        corrected_original_intensities = benchmark * np.cos((np.pi / 2) - angle)
-
-        corrected_co2 = co2 * (1 / np.sin(angle))
-        corrected_water_vapor = water_vapor * (1 / np.sin(angle))
-        co2_coefficients = CO2_COEFFICIENTS * corrected_co2
-        h2o_coefficients = WATER_VAPOR_COEFFICIENTS * corrected_water_vapor
-        remaining_intensities = corrected_original_intensities * np.power(10, co2_coefficients + h2o_coefficients)
-        total_transparencies += remaining_intensities.sum() / corrected_original_intensities.sum() \
-                                * np.sin(angle) * np.cos(angle)
-    return total_transparencies
-
-
-def _vert_trans(co2: float, water_vapor: float, correction_factor: float) -> float:
-    benchmark = np.array([27.2, 34.5, 29.6, 26.4, 27.5, 24.5, 13.5, 21.4,
-                          44.4, 59.0, 70, 75.5, 62.9, 56.4, 51.4, 39.1, 37.9,
-                          36.3, 32.7, 29.8, 21.9]) * correction_factor
-    remaining_intensities = benchmark * np.power(10, co2 * CO2_COEFFICIENTS) \
-                            * np.power(10, water_vapor * WATER_VAPOR_COEFFICIENTS)
-
-    return remaining_intensities.sum() / RELATIVE_INTENSITIES.sum()
-
-
-def calculate_transparency_five(co2: float, temperature: float, relative_humidity: float) -> float:
-    h2o = calculate_water_vapor(temperature, relative_humidity)
-    total_transparency = 0
-    for angle in ANGLE_CORRECTIONS:
-        corrected_co2 = co2 * (1 / np.sin(angle))
-        corrected_h2o = h2o * (1 / np.sin(angle))
-
-        total_transparency += _vert_trans(corrected_co2, corrected_h2o, np.cos((np.pi / 2) - angle)) * np.cos(angle) * np.sin(angle)
-    return total_transparency
+    parameters = {'h1': height,
+                  'zmdl': height,
+                  'range_km': dist,
+                  'wlnmlim': (200, 20000),
+                  'p': 949.0,
+                  't': temp,
+                  'wmol': [adjusted_h2o, adjusted_co2, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                  }
+    result = userhoriztrans(parameters)
+    return float(result['transmission'].mean())
 
 
 def calculate_water_vapor(temperature: float,
