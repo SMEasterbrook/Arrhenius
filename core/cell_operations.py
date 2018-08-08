@@ -2,10 +2,35 @@ import numpy as np
 from core.configuration import WeightFunc
 from lowtran import userhoriztrans
 
+from typing import Dict, Tuple
+
 # Constants for absolute humidity calculations
 CONST_A = 4.6543
 CONST_B = 1435.264
 CONST_C = -64.848
+
+# transparency calculation data
+RELATIVE_INTENSITIES = np.array([3.4, 11.6, 24.8, 45.9, 84.0, 121.7, 161.0,
+                                 189.0, 210.0, 210.0, 188.0, 147.0, 105.0,
+                                 103.0, 99.0, 60.0, 51.0, 65.0, 62.0,
+                                 43.0, 39.0])
+RELATIVE_INTENSITIES_2 = np.array([27.2, 34.5, 29.6, 26.4, 27.5, 24.5, 13.5, 21.4, 44.4, 59, 70, 75.5, 62.9, 56.4, 51.4, 39.1, 37.9, 36.3, 32.7, 29.8, 21.9])
+
+TOTAL_INTENSITY = RELATIVE_INTENSITIES.sum()
+
+# absorption coefficient data
+CO2_COEFFICIENTS = np.array([0.0, -.0296, -.0559, -.1070, -.3412, -.2035,
+                             -.2438, -.3760, -.1877, -.0931, -.0280, -.0416,
+                             -.2067, -.2466, -.2571, -.1652, -.0940, -.1992,
+                             -.1742, -.0188, -.0891])
+WATER_VAPOR_COEFFICIENTS = np.array([-.1455, -.1105, -.0952, -.0862, -.0068,
+                                     -.3114, -.2362, -.1933, -.3198, -.1576,
+                                     -.1661, -.2036, -.0484, 0.0, -.0507, 0.0,
+                                     -.1184, -.0628, -.1408, -.1817, -.1444])
+
+ANGLE_CORRECTIONS = np.array([np.pi / 12, np.pi / 6,
+                              np.pi / 4, np.pi / 3,
+                              (5 * np.pi) / 12, np.pi / 2])
 
 TRANSPARENCY = {
     (1.0, .3): .372, (1.0, .5): .350, (1.0, 1.0): .307, (1.0, 1.5): .269,
@@ -157,7 +182,7 @@ def calculate_modern_transparency(co2: float, temp: float,
                   'wlnmlim': (200, 20000),
                   'p': 949.0,
                   't': temp,
-                  'wmol': [adjusted_h2o, adjusted_co2, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                  'wmol': [adjusted_h2o, adjusted_co2, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
                   }
     result = userhoriztrans(parameters)
     return float(result['transmission'].mean())

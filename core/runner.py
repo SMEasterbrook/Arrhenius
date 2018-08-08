@@ -8,10 +8,8 @@ from data.statistics import convert_grid_data_to_table, print_tables, mean, std_
 
 import core.configuration as cnf
 import core.output_config as out_cnf
-import numpy as np
 
 from data.statistics import X2_EXPECTED
-# from lowtran import horiztrans
 
 from typing import List, Dict
 
@@ -203,20 +201,20 @@ class ModelRun:
         albedo = grid_cell.get_albedo()
 
         init_transparency = calculate_transparency(init_co2,
-                                                   cell_temperature,
+                                                   init_temperature,
                                                    relative_humidity,
                                                    co2_weight_func,
                                                    h2o_weight_func)
-        k = calibrate_constant(cell_temperature, albedo, init_transparency)
+        k = calibrate_constant(init_temperature, albedo, init_transparency)
 
         mid_transparency = calculate_transparency(new_co2,
-                                                  cell_temperature,
+                                                  init_temperature,
                                                   relative_humidity,
                                                   co2_weight_func,
                                                   h2o_weight_func)
         mid_temperature = get_new_temperature(albedo, mid_transparency, k)
         final_transparency = calculate_transparency(new_co2,
-                                                    cell_temperature,
+                                                    mid_temperature,
                                                     relative_humidity,
                                                     co2_weight_func,
                                                     h2o_weight_func)
@@ -310,25 +308,6 @@ def calibrate_constant(temperature: float,
     return pow(temperature, 4) * (1 + albedo * transparency)
 
 
-def get_coefficients() -> List[np.array]:
-    coefficients = []
-    coefficients.append(np.array([0.0, -.0296, -.0559, -.1070, -.3412, -.2035,
-                                  -.2438, -.3760, -.1877, -.0931, -.0280, -.0416,
-                                  -.2067, -.2466, -.2571, -.1652, -.0940, -.1992,
-                                  -.1742, -.0188, -.0891]))
-    coefficients.append(np.array([-.1455, -.1105, -.0952, -.0862, -.0068,
-                                  -.3114, -.2362, -.1933, -.3198, -.1576,
-                                  -.1661, -.2036, -.0484, 0.0, -.0507, 0.0,
-                                  -.1184, -.0628, -.1408, -.1817, -.1444]))
-    return coefficients
-
-
-def get_intensities() -> np.array:
-    return np.array([27.2, 34.5, 29.6, 26.4, 27.5, 24.5, 13.5, 21.4,
-                     44.4, 59.0, 70, 75.5, 62.9, 56.4, 51.4, 39.1, 37.9,
-                     36.3, 32.7, 29.8, 21.9])
-
-
 def get_new_temperature(albedo: float,
                         new_transparency: float,
                         k: float) -> float:
@@ -368,4 +347,4 @@ if __name__ == '__main__':
     out_cont.enable_output_type(out_cnf.AccuracyMetrics.TEMP_DELTA_VARIANCE)
 
     model = ModelRun(conf, out_cont)
-    grids = model.run_model(1, 3)
+    grids = model.run_model(1, 2)
