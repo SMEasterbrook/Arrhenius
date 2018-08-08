@@ -352,9 +352,9 @@ def landmask_albedo_data(temp_data: np.ndarray,
                            grid_dims[1]), dtype=float)
 
     # Albedo values used by Arrhenius in his model calculations.
-    ocean_albedo = (1.0 - 0.075)
+    ocean_albedo = 1.0
     land_albedo = 1.0
-    snow_albedo = 0.5
+    snow_albedo = 1.0
 
     # Intermediate array slices are cached at each for loop iteration
     # to prevent excess array indexing.
