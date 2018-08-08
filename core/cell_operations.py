@@ -146,34 +146,6 @@ def calculate_transparency(co2: float,
     return transparency
 
 
-def calculate_vert_trans(co2: float,
-                           temperature: float,
-                           relative_humidity: float) -> float:
-    """
-    Calculate the transparency for only the radiation rays emanating
-    normal to the surface of Earth.
-
-    :param co2:
-        The amount of cc2 in the atmosphere
-    :param temperature:
-        The average temperature of the Earth's surface
-    :param relative_humidity:
-        The relative humidity of the atmosphere
-    :return:
-        The fraction of rays that escape the Earth's atmosphere
-    """
-    h2o = calculate_water_vapor(temperature, relative_humidity)
-
-    total_intensity = RELATIVE_INTENSITIES.sum()
-    co2_transmissions = CO2_COEFFICIENTS * co2
-    h2o_transmissions = WATER_VAPOR_COEFFICIENTS * h2o
-    remaining_intensities = RELATIVE_INTENSITIES \
-                            * np.power(10,
-                                       co2_transmissions + h2o_transmissions)
-
-    return remaining_intensities.sum() / total_intensity / 2
-
-
 def calculate_modern_transparency(co2: float, temp: float,
                                   relative_humidity: float, height: float,
                                   dist: float) -> float:
@@ -214,44 +186,6 @@ def calculate_modern_transparency(co2: float, temp: float,
                   }
     result = userhoriztrans(parameters)
     return float(result['transmission'].mean())
-
-
-def modern_transparency_dict(temp: float, height: float, dist: float)\
-        -> Dict[Tuple[float, float], float]:
-    """
-    Create a table of transparencies for rays of radiation leaving
-    perpendicular to the Earth's surface. The transparencies correspond
-    to the different co2 and h2o pairings found in Arrhenius' original tables.
-
-    :param temp:
-        The temperature of the atmosphere
-
-    :param height:
-        The height in the atmosphere at which the transparency values
-        are calculated
-    :param dist:
-        The total length the radiation travels through the atmosphere
-    :return:
-        A Dict of transparency values with keys of co2 and h2o pairings/tuples
-    """
-    co2_values = [1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0, 10.0, 20.0, 40.0]
-    h2o_values = [.3, .5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 10.0]
-    parameters = {'h1': height,
-                  'zmdl': height,
-                  'range_km': dist,
-                  'wlnmlim': (200, 20000),
-                  'p': 949.0,
-                  't': temp,
-                  }
-    final_table = {}
-
-    for co2 in co2_values:
-        for h2o in h2o_values:
-            parameters['wmol'] = [co2, h2o, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
-            lowtran_result = userhoriztrans(parameters)
-            final_table[(co2, h2o)] = float(lowtran_result['transmission'].mean())
-
-    return final_table
 
 
 def calculate_water_vapor(temperature: float,

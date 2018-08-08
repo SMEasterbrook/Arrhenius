@@ -8,7 +8,6 @@ from data.statistics import convert_grid_data_to_table, print_tables, mean, std_
 
 import core.configuration as cnf
 import core.output_config as out_cnf
-import numpy as np
 
 from data.statistics import X2_EXPECTED
 
