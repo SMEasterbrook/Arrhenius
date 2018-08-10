@@ -72,7 +72,6 @@ class ModelRun:
             The state of the Earth's surface based on the model's calculations
         """
         out_cnf.set_output_center(self.output_controller)
-        data_source = "modern"
 
         if self.grids is None:
             year_of_interest = self.config[cnf.YEAR]
@@ -94,14 +93,14 @@ class ModelRun:
             report = "Preparing model run on {}{} grid".format(counter, place)
             self.output_controller.submit_output(out_cnf.Debug.PRINT_NOTICES, report)
 
-            if data_source == "arrhenius":
+            if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_TABLE:
                 for cell in grid:
                     new_temp = self.calculate_arr_cell_temperature(init_co2,
                                                                    new_co2,
                                                                    cell)
                     cell.set_temperature(new_temp)
 
-            elif data_source == "modern":
+            elif self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MODERN:
                 for cell in grid:
                     new_temp = self.calculate_modern_cell_temperature(init_co2,
                                                                       new_co2,
@@ -285,7 +284,6 @@ class ModelRun:
         self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TRANSPARENCY,
                                              delta_trans_report)
         return final_temperature - 273.15
-
 
 
 def calibrate_constant(temperature: float,

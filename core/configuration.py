@@ -35,7 +35,7 @@ AGGREGATE_LEVEL = "aggregate_level"
 TEMP_SRC = "temp_src"
 HUMIDITY_SRC = "humidity_src"
 ALBEDO_SRC = "albedo_src"
-ABSORBANCE_SRC = "abs_src"
+ABSORBANCE_SRC = "absorbance_src"
 CO2_WEIGHT = "CO2_weight"
 H2O_WEIGHT = "H2O_weight"
 
@@ -48,6 +48,9 @@ GRID_FORMAT_LON = "lon"
 AGGREGATE_BEFORE = "before"
 AGGREGATE_AFTER = "after"
 AGGREGATE_NONE = None
+
+ABS_SRC_TABLE = "table"
+ABS_SRC_MODERN = "modern"
 
 
 def weight_by_closest(lower_val: float,
