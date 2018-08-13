@@ -11,9 +11,9 @@ import core.output_config as out_cnf
 
 from data.statistics import X2_EXPECTED
 
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
-ATMOSPHERE_HEIGHT = 100.0
+ATMOSPHERE_HEIGHT = 50.0
 
 class ModelRun:
     """
@@ -33,7 +33,6 @@ class ModelRun:
         """
         Initialize the model configurations, the output controller, and the
         grid of data to run the model upon.
-
         :param config:
             A dictionary containing the configuration options for the model
         :param output_controller:
@@ -59,11 +58,9 @@ class ModelRun:
         """
         Calculate Earth's surface temperature change due to a change in
         CO2 levels from init_co2 to new_co2.
-
         Returns a list of grids, each of which represents the state of the
         Earth's surface over a range of time. The grids contain data produced
         from the model run.
-
         :param init_co2:
             The initial amount of CO2 in the atmosphere
         :param new_co2:
@@ -83,31 +80,44 @@ class ModelRun:
 
         # Run the body of the model, calculating temperature changes for each
         # cell in the grid.
-        counter = 1
-        for grid in self.grids:
-            place = "th" if (not 1 <= counter % 10 <= 3) \
-                            and (not 10 < counter < 20) \
-                else "st" if counter % 10 == 1 \
-                else "nd" if counter % 10 == 2 \
-                else "rd"
-            report = "Preparing model run on {}{} grid".format(counter, place)
-            self.output_controller.submit_output(out_cnf.Debug.PRINT_NOTICES, report)
+        if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MULTILAYER:
+            iterators = []
+            pressures = []
 
-            if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_TABLE:
-                for cell in grid:
-                    new_temp = self.calculate_arr_cell_temperature(init_co2,
-                                                                   new_co2,
-                                                                   cell)
-                    cell.set_temperature(new_temp)
+            for grid in self.grids:
+                iterators.append(grid.__iter__())
+                pressures.append(grid.get_pressure())
 
-            elif self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MODERN:
-                for cell in grid:
-                    new_temp = self.calculate_modern_cell_temperature(init_co2,
-                                                                      new_co2,
-                                                                      cell)
-                    cell.set_temperature(new_temp)
+            cell_iterator = zip(*iterators)
+            for layered_cell in cell_iterator:
+                new_temps = self.calculate_layered_cell_temperature(init_co2, new_co2, pressures, layered_cell)
 
-            counter += 1
+        else:
+            counter = 1
+            for grid in self.grids:
+                place = "th" if (not 1 <= counter % 10 <= 3) \
+                                and (not 10 < counter < 20) \
+                    else "st" if counter % 10 == 1 \
+                    else "nd" if counter % 10 == 2 \
+                    else "rd"
+                report = "Preparing model run on {}{} grid".format(counter, place)
+                self.output_controller.submit_output(out_cnf.Debug.PRINT_NOTICES, report)
+
+                if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_TABLE:
+                    for cell in grid:
+                        new_temp = self.calculate_arr_cell_temperature(init_co2,
+                                                                       new_co2,
+                                                                       cell)
+                        cell.set_temperature(new_temp)
+
+                elif self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MODERN:
+                    for cell in grid:
+                        new_temp = self.calculate_modern_cell_temperature(init_co2,
+                                                                          new_co2,
+                                                                          cell)
+                        cell.set_temperature(new_temp)
+
+                counter += 1
 
         # Average values over each latitude band after the model run.
         if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_AFTER:
@@ -180,7 +190,6 @@ class ModelRun:
         Calculate the change in temperature of a specific grid cell due to a
         change in CO2 levels in the atmosphere. Uses Arrhenius' absorption
         data.
-
         :param init_co2:
             The initial amount of CO2 in the atmosphere
         :param new_co2:
@@ -238,7 +247,6 @@ class ModelRun:
         Calculate the change in temperature of a specific grid cell due to a
         change in CO2 levels in the atmosphere. Uses Arrhenius' absorption
         data.
-
         :param init_co2:
             The initial amount of CO2 in the atmosphere
         :param new_co2:
@@ -285,6 +293,25 @@ class ModelRun:
                                              delta_trans_report)
         return final_temperature - 273.15
 
+    def calculate_layered_cell_temperature(self, init_co2: float,
+                                           new_co2: float,
+                                           pressures: List[float],
+                                           layers: Tuple['GridCell']) -> List[float]:
+        init_temps = []
+        init_transparencies = []
+
+        for layer_num in range(len(layers)):
+            init_temps.append(layers[layer_num].get_temperature())
+            relative_humidity = layers[layer_num].get_relative_hummidity()
+            transparency = calculate_modern_transparency(init_co2,
+                                                         init_temps[layer_num],
+                                                         relative_humidity,
+                                                         ATMOSPHERE_HEIGHT / 2,
+                                                         ATMOSPHERE_HEIGHT,
+                                                         pressures[layer_num])
+            init_transparencies.append(transparency)
+        return init_temps
+
 
 def calibrate_constant(temperature: float,
                        albedo: float,
@@ -292,14 +319,12 @@ def calibrate_constant(temperature: float,
     """
     Calculate the constant K used in Arrhenius' temperature change equation
     using the initial values of temperature and absorption in a grid cell.
-
     :param temperature:
         The temperature of the grid cell
     :param albedo:
         The albedo of the grid cell
     :param transparency:
         The transparency of the grid cell
-
     :return:
         The calculated constant K
     """
@@ -311,7 +336,6 @@ def get_new_temperature(albedo: float,
                         k: float) -> float:
     """
     Calculate the new temperature after a change in absorption coefficient
-
     :param albedo:
         The albedo of the grid cell
     :param new_transparency:
