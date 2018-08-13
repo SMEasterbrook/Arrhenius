@@ -51,6 +51,7 @@ AGGREGATE_NONE = None
 
 ABS_SRC_TABLE = "table"
 ABS_SRC_MODERN = "modern"
+ABS_SRC_MULTILAYER = "multilayer"
 
 
 def weight_by_closest(lower_val: float,
