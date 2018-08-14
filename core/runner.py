@@ -4,12 +4,14 @@ from data.grid import LatLongGrid, GridCell, \
     extract_multidimensional_grid_variable
 from data.collector import ClimateDataCollector
 from data.display import write_model_output
-from data.statistics import convert_grid_data_to_table, print_tables, mean, std_dev, variance
+from data.statistics import convert_grid_data_to_table, print_tables, mean, std_dev, variance, X2_EXPECTED
 
 import core.configuration as cnf
 import core.output_config as out_cnf
 
-from data.statistics import X2_EXPECTED
+import core.multilayer as ml
+import numpy as np
+import math
 
 from typing import List, Dict, Tuple
 
@@ -88,9 +90,21 @@ class ModelRun:
                 iterators.append(grid.__iter__())
                 pressures.append(grid.get_pressure())
 
+            # merges terms in each iterator into a Tuple; returns
+            # single iterator over Tuples
             cell_iterator = zip(*iterators)
+
+            # replace dummy array below with pressures later!
+            layer_dims = pressures_to_layer_dimensions(pressures)
+
             for layered_cell in cell_iterator:
-                new_temps = self.calculate_layered_cell_temperature(init_co2, new_co2, pressures, layered_cell)
+                new_temps = self.calculate_layered_cell_temperature(init_co2,
+                                                                    new_co2,
+                                                                    pressures,
+                                                                    layer_dims,
+                                                                    layered_cell)
+                for cell_num in range(len(layered_cell)):
+                    layered_cell[cell_num].set_temperature(new_temps[cell_num] - 273.15)
 
         else:
             counter = 1
@@ -295,22 +309,84 @@ class ModelRun:
 
     def calculate_layered_cell_temperature(self, init_co2: float,
                                            new_co2: float,
-                                           pressures: List[float],
+                                           pressures: List['float'],
+                                           layer_dims: List[List[float]],
                                            layers: Tuple['GridCell']) -> List[float]:
         init_temps = []
         init_transparencies = []
 
         for layer_num in range(len(layers)):
-            init_temps.append(layers[layer_num].get_temperature())
-            relative_humidity = layers[layer_num].get_relative_hummidity()
+            init_temps.append(layers[layer_num].get_temperature() + 273.15)
+            relative_humidity = layers[layer_num].get_relative_humidity()
             transparency = calculate_modern_transparency(init_co2,
                                                          init_temps[layer_num],
                                                          relative_humidity,
-                                                         ATMOSPHERE_HEIGHT / 2,
-                                                         ATMOSPHERE_HEIGHT,
+                                                         layer_dims[layer_num][0],
+                                                         layer_dims[layer_num][1],
                                                          pressures[layer_num])
             init_transparencies.append(transparency)
-        return init_temps
+        init_matrix = ml.build_multilayer_matrix(np.array(init_transparencies))
+        coefficients = ml.calibrate_multilayer_matrix(init_matrix,
+                                                      np.array(init_temps))
+        mid_transparencies = []
+        for layer_num in range(len(layers)):
+            relative_humidity = layers[layer_num].get_relative_humidity()
+            transparency = calculate_modern_transparency(new_co2,
+                                                         init_temps[layer_num],
+                                                         relative_humidity,
+                                                         layer_dims[layer_num][0],
+                                                         layer_dims[layer_num][1],
+                                                         pressures[layer_num])
+            mid_transparencies.append(transparency)
+        mid_matrix = ml.build_multilayer_matrix(np.array(mid_transparencies))
+        mid_temps = ml.solve_multilayer_matrix(mid_matrix, coefficients)
+
+        final_transparencies = []
+        for layer_num in range(len(layers)):
+            relative_humidity = layers[layer_num].get_relative_humidity()
+            transparency = calculate_modern_transparency(new_co2,
+                                                         mid_temps[layer_num],
+                                                         relative_humidity,
+                                                         layer_dims[layer_num][0],
+                                                         layer_dims[layer_num][1],
+                                                         pressures[layer_num])
+            final_transparencies.append(transparency)
+        final_matrix = ml.build_multilayer_matrix(np.array(final_transparencies))
+        final_temps = ml.solve_multilayer_matrix(final_matrix, coefficients)
+
+        return final_temps
+
+def pressures_to_layer_dimensions(pressures: List[float]) -> List[List[float]]:
+    """
+    Converts a list of atmospheric pressures into a list of layer dimensions.
+    Each entry at index i in the list holds a list of two dimensions for an
+    atmospheric layer corresponding to the atmospheric pressure in index i of
+    parameter list. These 2 dimensions are:
+    -  the elevation/height of the top boundary of the layer (index 0)
+    -  the thickness/depth of the layer (index 1)
+
+    Uses the hypsometric equation to calculate elevation from atmospheric
+    pressure.
+
+    :param pressures:
+        A list of atmospheric pressures. Should be sorted in descending order.
+    :return:
+        A list of elevation and depth for each atmospheric pressure layer.
+    """
+    layer_dimensions = [[0.0, 0.0]]
+    for num in range(len(pressures)):
+        # convert millibars to Pascals
+        pressures[num] *= 100
+        if pressures[num] > 0.0:
+            elevation = (-287.053 * 288.15 / 9.80665) * math.log(pressures[num] / 101325) / 1000.0
+            # adding layer_dimensions of index num + 1
+            # so previous layer dims are at index num
+            depth = elevation - layer_dimensions[num][0]
+            layer_dimensions.append([elevation, depth])
+        else:
+            layer_dimensions.append([0.0, 0.0])
+
+    return layer_dimensions[1:]
 
 
 def calibrate_constant(temperature: float,
