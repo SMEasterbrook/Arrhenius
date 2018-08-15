@@ -1,6 +1,6 @@
 from core.cell_operations import calculate_transparency, calculate_modern_transparency
 
-from data.grid import LatLongGrid, GridCell, \
+from data.grid import LatLongGrid, GridCell, GridDimensions, \
     extract_multidimensional_grid_variable
 from data.collector import ClimateDataCollector
 from data.display import write_model_output
@@ -17,6 +17,7 @@ from typing import List, Dict, Tuple
 
 ATMOSPHERE_HEIGHT = 50.0
 
+
 class ModelRun:
     """
     A class that is used to run the Arrhenius climate model on the given
@@ -31,7 +32,7 @@ class ModelRun:
 
     def __init__(self, config: Dict[str, object],
                  output_controller: 'OutputController',
-                 grids: List['LatLongGrid'] = None) -> None:
+                 grids: List[List['LatLongGrid']] = None) -> None:
         """
         Initialize the model configurations, the output controller, and the
         grid of data to run the model upon.
@@ -53,10 +54,11 @@ class ModelRun:
         self.collector = ClimateDataCollector(config[cnf.GRID]) \
             .use_temperature_source(config[cnf.TEMP_SRC]) \
             .use_humidity_source(config[cnf.HUMIDITY_SRC]) \
-            .use_albedo_source(config[cnf.ALBEDO_SRC])
+            .use_albedo_source(config[cnf.ALBEDO_SRC]) \
+            .use_pressure_source(config[cnf.PRESSURE_SRC])
 
     def run_model(self, init_co2: float,
-                  new_co2: float) -> List['LatLongGrid']:
+                  new_co2: float) -> List[List['LatLongGrid']]:
         """
         Calculate Earth's surface temperature change due to a change in
         CO2 levels from init_co2 to new_co2.
@@ -83,28 +85,31 @@ class ModelRun:
         # Run the body of the model, calculating temperature changes for each
         # cell in the grid.
         if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MULTILAYER:
-            iterators = []
-            pressures = []
+            for time in self.grids:
+                iterators = []
+                pressures = []
+                for grid in time:
+                    iterators.append(grid.__iter__())
+                    pressures.append(grid.get_pressure())
+                pressures.pop(0)
 
-            for grid in self.grids:
-                iterators.append(grid.__iter__())
-                pressures.append(grid.get_pressure())
+                # merges terms in each iterator into a Tuple; returns
+                # single iterator over Tuples
+                cell_iterator = zip(*iterators)
 
-            # merges terms in each iterator into a Tuple; returns
-            # single iterator over Tuples
-            cell_iterator = zip(*iterators)
+                # replace dummy array below with pressures later!
+                layer_dims = pressures_to_layer_dimensions(pressures)
 
-            # replace dummy array below with pressures later!
-            layer_dims = pressures_to_layer_dimensions(pressures)
-
-            for layered_cell in cell_iterator:
-                new_temps = self.calculate_layered_cell_temperature(init_co2,
-                                                                    new_co2,
-                                                                    pressures,
-                                                                    layer_dims,
-                                                                    layered_cell)
-                for cell_num in range(len(layered_cell)):
-                    layered_cell[cell_num].set_temperature(new_temps[cell_num] - 273.15)
+                for layered_cell in cell_iterator:
+                    new_temps = self.calculate_layered_cell_temperature(init_co2,
+                                                                        new_co2,
+                                                                        pressures,
+                                                                        layer_dims,
+                                                                        layered_cell)
+                    for cell_num in range(len(layered_cell)):
+                        layered_cell[cell_num].set_temperature(new_temps[cell_num])
+                print("HAFAL")
+                return self.grids
 
         else:
             counter = 1
@@ -133,18 +138,18 @@ class ModelRun:
 
                 counter += 1
 
-        # Average values over each latitude band after the model run.
-        if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_AFTER:
-            self.grids = [grid.latitude_bands() for grid in self.grids]
-
-        self.print_statistic_tables()
-
-        # Finally, write model output to disk.
-        out_cnf.global_output_center().submit_collection_output(
-            out_cnf.PRIMARY_OUTPUT_PATH,
-            self.grids,
-            self.config[cnf.RUN_ID]
-        )
+        # # Average values over each latitude band after the model run.
+        # if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_AFTER:
+        #     self.grids = [grid.latitude_bands() for grid in self.grids]
+        #
+        # self.print_statistic_tables()
+        #
+        # # Finally, write model output to disk.
+        # out_cnf.global_output_center().submit_collection_output(
+        #     out_cnf.PRIMARY_OUTPUT_PATH,
+        #     self.grids,
+        #     self.config[cnf.RUN_ID]
+        # )
 
         return self.grids
 
@@ -312,14 +317,14 @@ class ModelRun:
                                            pressures: List['float'],
                                            layer_dims: List[List[float]],
                                            layers: Tuple['GridCell']) -> List[float]:
-        init_temps = []
-        init_transparencies = []
+        init_temps = [layers[0].get_temperature() + 273.15]
+        init_transparencies = [1]
 
-        for layer_num in range(len(layers)):
-            init_temps.append(layers[layer_num].get_temperature() + 273.15)
-            relative_humidity = layers[layer_num].get_relative_humidity()
+        for layer_num in range(len(layers) - 1):
+            init_temps.append(layers[layer_num + 1].get_temperature() + 273.15)
+            relative_humidity = layers[layer_num + 1].get_relative_humidity()
             transparency = calculate_modern_transparency(init_co2,
-                                                         init_temps[layer_num],
+                                                         init_temps[layer_num + 1],
                                                          relative_humidity,
                                                          layer_dims[layer_num][0],
                                                          layer_dims[layer_num][1],
@@ -328,11 +333,11 @@ class ModelRun:
         init_matrix = ml.build_multilayer_matrix(np.array(init_transparencies))
         coefficients = ml.calibrate_multilayer_matrix(init_matrix,
                                                       np.array(init_temps))
-        mid_transparencies = []
-        for layer_num in range(len(layers)):
-            relative_humidity = layers[layer_num].get_relative_humidity()
+        mid_transparencies = [1]
+        for layer_num in range(len(layers) - 1):
+            relative_humidity = layers[layer_num + 1].get_relative_humidity()
             transparency = calculate_modern_transparency(new_co2,
-                                                         init_temps[layer_num],
+                                                         init_temps[layer_num + 1],
                                                          relative_humidity,
                                                          layer_dims[layer_num][0],
                                                          layer_dims[layer_num][1],
@@ -341,11 +346,11 @@ class ModelRun:
         mid_matrix = ml.build_multilayer_matrix(np.array(mid_transparencies))
         mid_temps = ml.solve_multilayer_matrix(mid_matrix, coefficients)
 
-        final_transparencies = []
-        for layer_num in range(len(layers)):
-            relative_humidity = layers[layer_num].get_relative_humidity()
+        final_transparencies = [1]
+        for layer_num in range(len(layers) - 1):
+            relative_humidity = layers[layer_num + 1].get_relative_humidity()
             transparency = calculate_modern_transparency(new_co2,
-                                                         mid_temps[layer_num],
+                                                         mid_temps[layer_num + 1],
                                                          relative_humidity,
                                                          layer_dims[layer_num][0],
                                                          layer_dims[layer_num][1],
@@ -354,7 +359,8 @@ class ModelRun:
         final_matrix = ml.build_multilayer_matrix(np.array(final_transparencies))
         final_temps = ml.solve_multilayer_matrix(final_matrix, coefficients)
 
-        return final_temps
+        return final_temps - 273.15
+
 
 def pressures_to_layer_dimensions(pressures: List[float]) -> List[List[float]]:
     """
@@ -427,9 +433,11 @@ def get_new_temperature(albedo: float,
 
 
 if __name__ == '__main__':
-    title = "arrhenius_x2"
+    title = "multilayer_1"
+    grid = GridDimensions((4, 4), "count")
     conf = cnf.default_config()
-    conf[cnf.AGGREGATE_LAT] = cnf.AGGREGATE_BEFORE
+    conf[cnf.RUN_ID] = title
+    conf[cnf.AGGREGATE_LAT] = cnf.AGGREGATE_NONE
     conf[cnf.CO2_WEIGHT] = cnf.weight_by_mean
     conf[cnf.H2O_WEIGHT] = cnf.weight_by_mean
 
@@ -446,3 +454,5 @@ if __name__ == '__main__':
 
     model = ModelRun(conf, out_cont)
     grids = model.run_model(1, 2)
+
+    write_model_output(grids[0], title)
