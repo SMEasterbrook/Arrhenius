@@ -249,10 +249,10 @@ class GridCell:
         if temp < -273:
             raise ValueError("Value for temperature must be greater than -273"
                              "(is {})".format(temp))
-        elif r_hum < 0 or r_hum > 100:
+        elif r_hum is not None and (r_hum < 0 or r_hum > 100):
             raise ValueError("Value for relative humidity must fall in"
                              "[0, 100] (is {})".format(r_hum))
-        elif albedo < 0 or albedo > 1:
+        elif albedo is not None and (albedo < 0 or albedo > 1):
             raise ValueError("Value for albedo must fall in [0, 1] (is {})"
                              .format(albedo))
 
