@@ -297,16 +297,58 @@ def ncar_humidity_data(grid: 'GridDimensions'
     :return:
         NCEP/NCAR surface relative humidity data
     """
-    dataset = custom_readers.NCEPHumidityReader()
+    dataset = custom_readers.NCEPReader('water')
 
-    if year is None:
-        humidity = dataset.read_newest('shum')[:]
-    else:
-        humidity = dataset.collect_timed_data('shum', year)
+    humidity = dataset.collect_timed_layered_data('rhum', year)
+
     # Regrid the humidity variable to the specified grid, if necessary.
-    regridded_humidity = _regrid_netcdf_variable(humidity, grid, 3)
+    regridded_humidity = _regrid_netcdf_variable(humidity, grid, 4)
+
+    grid_by_count = grid.dims_by_count()
+    top_atm_shape = (humidity.shape[0], 5, grid_by_count[0], grid_by_count[1])
+    high_layer_humidity = np.zeros(top_atm_shape)
+    regridded_humidity = np.hstack((regridded_humidity, high_layer_humidity))
 
     return regridded_humidity
+
+
+def ncar_temperature_data(grid: 'GridDimensions'
+                          = GridDimensions((10, 20)),
+                          year: int = None) -> np.array:
+    """
+
+    :param grid:
+    :type grid:
+    :param year:
+    :type year:
+    :return:
+    :rtype:
+    """
+    dataset = custom_readers.NCEPReader('temperature')
+
+    temp = dataset.collect_timed_layered_data('air', year)
+
+    # Regrid the humidity variable to the specified grid, if necessary.
+    regridded_temp = _regrid_netcdf_variable(temp, grid, 4)
+    ground_temp = regridded_temp[:, 0, ...]
+    ground_temp = ground_temp[:, np.newaxis, ...]
+    regridded_temp = np.hstack((ground_temp, regridded_temp))
+
+    return regridded_temp
+
+
+def ncar_pressure_levels() -> np.array:
+    """
+
+    :param grid:
+    :type grid:
+    :param year:
+    :type year:
+    :return:
+    :rtype:
+    """
+    dataset = custom_readers.NCEPReader('temperature')
+    return dataset.pressure()
 
 
 def landmask_albedo_data(temp_data: np.ndarray,
@@ -359,7 +401,11 @@ def landmask_albedo_data(temp_data: np.ndarray,
     # Intermediate array slices are cached at each for loop iteration
     # to prevent excess array indexing.
     for i in range(len(temp_data)):
-        temp_time_segment = temp_data[i]
+        if len(temp_data.shape) == 3:
+            temp_time_segment = temp_data[i]
+        else:
+            temp_time_segment = temp_data[i, ..., 0, :, :]
+            print("X")
 
         for j in range(grid_dims[0]):
             landmask_row = regridded_land_coords[j]
@@ -402,7 +448,8 @@ REQUIRE_TEMP_DATA_INPUT = [landmask_albedo_data]
 PROVIDERS = {
     "temperature": {
         "arrhenius": arrhenius_temperature_data,
-        "berkeley": berkeley_temperature_data
+        "berkeley": berkeley_temperature_data,
+        "ncar": ncar_temperature_data
     },
     "humidity": {
         "arrhenius": arrhenius_humidity_data,
@@ -410,5 +457,13 @@ PROVIDERS = {
     },
     "albedo": {
         "landmask": landmask_albedo_data
-    }
+    },
+    "pressure": {
+        "ncar": ncar_pressure_levels
+    },
 }
+
+
+if __name__ == '__main__':
+    grid = GridDimensions((10, 20), "width")
+    g = ncar_humidity_data(grid, 1950)

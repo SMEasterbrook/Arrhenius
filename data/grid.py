@@ -249,10 +249,10 @@ class GridCell:
         if temp < -273:
             raise ValueError("Value for temperature must be greater than -273"
                              "(is {})".format(temp))
-        elif r_hum < 0 or r_hum > 100:
+        elif r_hum is not None and (r_hum < 0 or r_hum > 100):
             raise ValueError("Value for relative humidity must fall in"
                              "[0, 100] (is {})".format(r_hum))
-        elif albedo < 0 or albedo > 1:
+        elif albedo is not None and (albedo < 0 or albedo > 1):
             raise ValueError("Value for albedo must fall in [0, 1] (is {})"
                              .format(albedo))
 
@@ -378,7 +378,7 @@ class LatLongGrid:
     to create additional GridCell instances.
     """
     def __init__(self: 'LatLongGrid',
-                 data: List[List[GridCell]]) -> None:
+                 data: List[List[GridCell]], pressure: float = 0.0) -> None:
         """
         Instantiate a new LatLongGrid instance. The dimensions of the grid
         are inferred from the shape of the nested list in the second parameter.
@@ -389,8 +389,14 @@ class LatLongGrid:
 
         :param data:
             A nested list containing gridded data
+        :param pressure:
+            Optional parameter that is only used in runs of the model using
+            the modern absorption source. The pressure of the atmosphere
+            should be in millibars. Defaults to 0.0 if not explicitly
+            specified
         """
         self._data = data
+        self._pressure = pressure
 
         # Iterator and caching attributes
         self._most_recent_row = None
@@ -502,6 +508,23 @@ class LatLongGrid:
             self._most_recent_row = self._data[lat]
 
         return self._most_recent_row[lon]
+
+    def set_pressure(self, press: float) -> None:
+        """
+        Set a new value for the atmospheric pressure of the grid
+        object in millibars.
+
+        :param press:
+            The pressure of the atmosphere in millibars
+        """
+        self._pressure = press
+
+    def get_pressure(self) -> float:
+        """
+        :return:
+            The pressure of the atmosphere as a float with units of millibars
+        """
+        return self._pressure
 
     def extract_datapoint(self: 'LatLongGrid',
                           datapoint: str) -> np.ndarray:

@@ -1,7 +1,8 @@
-from typing import List, Callable, Union
+from typing import Optional, List, Callable, Union
 from data.grid import LatLongGrid, GridCell, GridDimensions
 
 from data.provider import REQUIRE_TEMP_DATA_INPUT
+import numpy as np
 
 
 # Type aliases
@@ -34,9 +35,11 @@ class ClimateDataCollector:
         self._humidity_source = None
         self._albedo_source = None
         self._absorbance_source = None
+        self._pressure_source = None
 
         # Cached data from the above sources.
         self._grid_data = None
+        self._pressure_data = None
         self._absorbance_data = None
 
         self._grid = grid
@@ -121,8 +124,14 @@ class ClimateDataCollector:
         self._absorbance_data = None
         return self
 
+    def use_pressure_source(self: CDC,
+                            pressure_src: Callable) -> CDC:
+        self._pressure_source = pressure_src
+        self._pressure_data = None
+        return self
+
     def get_gridded_data(self: CDC,
-                         year: int = None) -> List['LatLongGrid']:
+                         year: int = None) -> List[List['LatLongGrid']]:
         """
         Combines and returns all gridded surface data, including surface
         temperature, relative humidity, and surface albedo. The data is
@@ -149,9 +158,9 @@ class ClimateDataCollector:
         temp_data = self._temp_source(self._grid, year)
         r_hum_data = self._humidity_source(self._grid, year)
 
-        if len(temp_data) != len(r_hum_data):
-            raise ValueError("Temperature and humidity must have the same"
-                             "time dimensions")
+        # if len(temp_data) != len(r_hum_data):
+        #     raise ValueError("Temperature and humidity must have the same"
+        #                      "time dimensions")
 
         if self._albedo_source in REQUIRE_TEMP_DATA_INPUT:
             albedo_data = self._albedo_source(temp_data, self._grid)
@@ -160,40 +169,70 @@ class ClimateDataCollector:
         self._grid_data = []
         grid_dims = self._grid.dims_by_count()
 
-        # Start building a 2-D nested list structure for output, row by roW.
+        if len(temp_data.shape) == 3:
+            layers = 1
+        else:
+            layers = r_hum_data.shape[-3]
+
+        if self._pressure_source is None:
+            pressures = None
+        else:
+            pressures = self._pressure_source()
+
+        # Start building a 2-D nested list structure for output, row by row.
+        print(temp_data.shape)
         for i in range(len(temp_data)):
             temp_time_segment = temp_data[i]
             r_hum_time_segment = r_hum_data[i]
             albedo_time_segment = albedo_data[i]
 
             time_segment_row = []
-            for j in range(grid_dims[0]):
-                # Holding row lists in memory prevents excess list lookups.
-                temp_row = temp_time_segment[j]
-                r_hum_row = r_hum_time_segment[j]
-                albedo_row = albedo_time_segment[j]
-                # Start creating a new list column for entry into the output
-                # list.
-                longitude_row = []
+            time_segment_row.append(self._build_grid(grid_dims,
+                                                    temp_time_segment[0, :, :],
+                                                    albedo=albedo_time_segment))
 
-                for k in range(grid_dims[1]):
-                    # Package the data from this grid cell into a GridCell
-                    # object.
-                    temp = temp_row[k]
-                    r_hum = r_hum_row[k]
-                    albedo = albedo_row[k]
+            for m in range(layers):
+                time_segment_row.append(self._build_grid(grid_dims,
+                                                         temp_time_segment[m],
+                                                         humidity=r_hum_time_segment[m],
+                                                         pressure=None if pressures is None else pressures[m]))
 
-                    grid_cell_obj = GridCell(temp, r_hum, albedo)
-
-                    # Add new GridCell objects into the 2-D nested lists.
-                    longitude_row.append(grid_cell_obj)
-                time_segment_row.append(longitude_row)
-
-            # Store data for this time gradation in a LatLongGrid object.
-            new_grid_data = LatLongGrid(time_segment_row)
-            self._grid_data.append(new_grid_data)
+            self._grid_data.append(time_segment_row)
 
         return self._grid_data
+
+    def _build_grid(self,
+                   dimensions: 'GridDimensions',
+                   temp_data: np.ndarray,
+                   humidity: Optional[np.ndarray] = None,
+                   albedo: Optional[np.ndarray]= None,
+                   pressure: Optional[float] = None) -> 'LatLongGrid':
+        grid_cells = []
+
+        for j in range(dimensions[0]):
+            # Holding row lists in memory prevents excess list lookups.
+            temp_row = temp_data[j]
+            r_hum_row = None if humidity is None else humidity[j]
+            albedo_row = None if albedo is None else albedo[j]
+            # Start creating a new list column for entry into the output
+            # list.
+            longitude_row = []
+
+            for k in range(dimensions[1]):
+                # Package the data from this grid cell into a GridCell
+                # object.
+                temp_val = temp_row[k]
+                r_hum_val = None if humidity is None else r_hum_row[k]
+                albedo_val = None if albedo is None else albedo_row[k]
+
+                grid_cell_obj = GridCell(temp_val, r_hum_val, albedo_val)
+
+                # Add new GridCell objects into the 2-D nested lists.
+                longitude_row.append(grid_cell_obj)
+            grid_cells.append(longitude_row)
+        level_grid = LatLongGrid(grid_cells)
+        level_grid.set_pressure(pressure)
+        return level_grid
 
     def get_absorbance_data(self: CDC) -> Union[List[List[float]], float]:
         """

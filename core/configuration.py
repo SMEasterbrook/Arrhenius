@@ -36,6 +36,7 @@ TEMP_SRC = "temp_src"
 HUMIDITY_SRC = "humidity_src"
 ALBEDO_SRC = "albedo_src"
 ABSORBANCE_SRC = "absorbance_src"
+PRESSURE_SRC = "pressure_src"
 CO2_WEIGHT = "CO2_weight"
 H2O_WEIGHT = "H2O_weight"
 
@@ -51,6 +52,7 @@ AGGREGATE_NONE = None
 
 ABS_SRC_TABLE = "table"
 ABS_SRC_MODERN = "modern"
+ABS_SRC_MULTILAYER = "multilayer"
 
 
 def weight_by_closest(lower_val: float,
@@ -296,6 +298,7 @@ def from_dict(options: Dict[str, str]) -> Config:
     config[TEMP_SRC] = PROVIDERS['temperature'][config[TEMP_SRC]]
     config[HUMIDITY_SRC] = PROVIDERS['humidity'][config[HUMIDITY_SRC]]
     config[ALBEDO_SRC] = PROVIDERS['albedo'][config[ALBEDO_SRC]]
+    config[PRESSURE_SRC] = PROVIDERS['pressure'][config[PRESSURE_SRC]]
 
     # Replace string identifying transparency-weighting functions with the
     # functions themselves.
