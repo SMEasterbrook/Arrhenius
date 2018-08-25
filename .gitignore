@@ -3,3 +3,7 @@
 data/models
 data/output/*
 __pycache__
+
+*.png
+website
+!website/api.py
