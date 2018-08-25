@@ -1,12 +1,8 @@
-from typing import Optional, List, Callable, Union
+from typing import Optional, List, Tuple, Callable
 from data.grid import LatLongGrid, GridCell, GridDimensions
 
 from data.provider import REQUIRE_TEMP_DATA_INPUT
 import numpy as np
-
-
-# Type aliases
-CDC = 'ClimateDataCollector'
 
 
 class ClimateDataCollector:
@@ -20,7 +16,7 @@ class ClimateDataCollector:
     test functionality.
     """
 
-    def __init__(self: CDC,
+    def __init__(self: 'ClimateDataCollector',
                  grid: 'GridDimensions' = GridDimensions((10, 20))) -> None:
         """
         Instantiate a new ClimateDataCollector instance.
@@ -44,8 +40,8 @@ class ClimateDataCollector:
 
         self._grid = grid
 
-    def load_grid(self: CDC,
-                  grid: 'GridDimensions') -> CDC:
+    def load_grid(self: 'ClimateDataCollector',
+                  grid: 'GridDimensions') -> 'ClimateDataCollector':
         """
         Select dimensions for a new latitude and longitude grid, to which
         all gridded data is fitted. Returns the collector object, so that
@@ -57,8 +53,8 @@ class ClimateDataCollector:
         self._grid_data = None
         return self
 
-    def use_temperature_source(self: CDC,
-                               temp_src: Callable) -> CDC:
+    def use_temperature_source(self: 'ClimateDataCollector',
+                               temp_src: Callable) -> 'ClimateDataCollector':
         """
         Load a new temperature provider function, used as an access point to
         temperature data. Returns the collector object, so that repeated
@@ -74,8 +70,8 @@ class ClimateDataCollector:
         self._grid_data = None
         return self
 
-    def use_humidity_source(self: CDC,
-                            r_hum_src: Callable) -> CDC:
+    def use_humidity_source(self: 'ClimateDataCollector',
+                            r_hum_src: Callable) -> 'ClimateDataCollector':
         """
         Load a new relative humidity provider function, used as an access point
         to humidity data. Returns the collector object, so that repeated
@@ -91,8 +87,8 @@ class ClimateDataCollector:
         self._grid_data = None
         return self
 
-    def use_albedo_source(self: CDC,
-                          albedo_src: Callable) -> CDC:
+    def use_albedo_source(self: 'ClimateDataCollector',
+                          albedo_src: Callable) -> 'ClimateDataCollector':
         """
         Load a new albedo provider function, used as an access point to
         surface albedo data. Returns the collector object, so that repeated
@@ -108,8 +104,8 @@ class ClimateDataCollector:
         self._grid_data = None
         return self
 
-    def use_absorbance_source(self: CDC,
-                              absorbance_src: Callable) -> CDC:
+    def use_absorbance_source(self: 'ClimateDataCollector',
+                              abs_src: Callable) -> 'ClimateDataCollector':
         """
         Load a new absorbance provider function, used as an access point to
         atmospheric heat absorbance data. Returns the collector object, so
@@ -120,17 +116,17 @@ class ClimateDataCollector:
         :return:
             This ClimateDataCollector
         """
-        self._absorbance_source = absorbance_src
+        self._absorbance_source = abs_src
         self._absorbance_data = None
         return self
 
-    def use_pressure_source(self: CDC,
-                            pressure_src: Callable) -> CDC:
+    def use_pressure_source(self: 'ClimateDataCollector',
+                            pressure_src: Callable) -> 'ClimateDataCollector':
         self._pressure_source = pressure_src
         self._pressure_data = None
         return self
 
-    def get_gridded_data(self: CDC,
+    def get_gridded_data(self: 'ClimateDataCollector',
                          year: int = None) -> List[List['LatLongGrid']]:
         """
         Combines and returns all gridded surface data, including surface
@@ -180,33 +176,39 @@ class ClimateDataCollector:
             pressures = self._pressure_source()
 
         # Start building a 2-D nested list structure for output, row by row.
-        print(temp_data.shape)
         for i in range(len(temp_data)):
             temp_time_segment = temp_data[i]
             r_hum_time_segment = r_hum_data[i]
             albedo_time_segment = albedo_data[i]
 
             time_segment_row = []
-            time_segment_row.append(self._build_grid(grid_dims,
-                                                    temp_time_segment[0, :, :],
-                                                    albedo=albedo_time_segment))
-
-            for m in range(layers):
+            if temp_time_segment.ndim == 2:
                 time_segment_row.append(self._build_grid(grid_dims,
-                                                         temp_time_segment[m],
-                                                         humidity=r_hum_time_segment[m],
-                                                         pressure=None if pressures is None else pressures[m]))
+                                                         temp_time_segment,
+                                                         albedo=albedo_time_segment,
+                                                         humidity=r_hum_time_segment))
+            else:
+                time_segment_row.append(self._build_grid(grid_dims,
+                                                         temp_time_segment[0, ...],
+                                                         albedo=albedo_time_segment))
+
+                for m in range(layers):
+                    layer_pressure = None if pressures is None else pressures[m]
+                    time_segment_row.append(self._build_grid(grid_dims,
+                                                             temp_time_segment[m],
+                                                             humidity=r_hum_time_segment[m],
+                                                             pressure=layer_pressure))
 
             self._grid_data.append(time_segment_row)
 
         return self._grid_data
 
     def _build_grid(self,
-                   dimensions: 'GridDimensions',
-                   temp_data: np.ndarray,
-                   humidity: Optional[np.ndarray] = None,
-                   albedo: Optional[np.ndarray]= None,
-                   pressure: Optional[float] = None) -> 'LatLongGrid':
+                    dimensions: Tuple[int, int],
+                    temp_data: np.ndarray,
+                    humidity: Optional[np.ndarray] = None,
+                    albedo: Optional[np.ndarray]= None,
+                    pressure: Optional[float] = None) -> 'LatLongGrid':
         grid_cells = []
 
         for j in range(dimensions[0]):
@@ -234,7 +236,7 @@ class ClimateDataCollector:
         level_grid.set_pressure(pressure)
         return level_grid
 
-    def get_absorbance_data(self: CDC) -> Union[List[List[float]], float]:
+    def get_absorbance_data(self: 'ClimateDataCollector') -> np.array:
         """
         Builds and returns atmospheric absorbance data.
         This data may be in the form of a float, if the collector is using
