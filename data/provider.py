@@ -360,17 +360,21 @@ def landmask_albedo_data(temp_data: np.ndarray,
     land has a constant albedo, and all water likewise has a constant
     albedo. In this case clouds are ignored, although they would
     contribute to lower global average albedo.
+
     Data is returned in a numpy array. The first index represents
     latitude, and the second index is longitude.
+
     Gridded temperature data is required in the first parameter in
     order to identify which cells are covered in snow. This data
     should come from a temperature provider function that has been
     passed the same grid as this function. That is, the temperature
     data should be on the same grid as the albedo data will be
     converted to.
+
     The returned albedo data will have the same time granularity as the
     temperature data it is based on (i.e. monthly value if the temperature
     is reported in monthly values).
+
     :param temp_data:
         Gridded surface temperature data, on the same grid as the data will
         be converted to
@@ -394,9 +398,9 @@ def landmask_albedo_data(temp_data: np.ndarray,
                            grid_dims[1]), dtype=float)
 
     # Albedo values used by Arrhenius in his model calculations.
-    ocean_albedo = 1.0
+    ocean_albedo = 0.925
     land_albedo = 1.0
-    snow_albedo = 1.0
+    snow_albedo = 0.5
 
     # Intermediate array slices are cached at each for loop iteration
     # to prevent excess array indexing.
@@ -430,36 +434,61 @@ def landmask_albedo_data(temp_data: np.ndarray,
     return albedo_mask
 
 
+def constant_albedo_data(temp_data: np.ndarray,
+                         grid: 'GridDimensions'
+                         = GridDimensions((10, 20))) -> np.ndarray:
+    """
+    Returns an array of absorption values for grid cells under the specified
+    grid, and with the same number of time units as temp_data. Assumes that
+    all grid cells have a constant absorption of 1.0, that is, that the whole
+    Earth is a black body. This assumption may have been made by Arrhenius
+    for simplicity in the original model.
+
+    :param temp_data:
+        Temperature data for the run, straight from the dataset
+    :param grid:
+        The dimensions of the grid onto which the data will be converted
+    :return:
+        A grid of 1's satisfying the shape of the existing data.
+    """
+    grid_count = grid.dims_by_count()
+    grid_shape = (len(temp_data), grid_count[0], grid_count[1])
+    return np.ones(grid_shape)
+
+
 def static_absorbance_data() -> float:
     """
     A data provider that gives a single, global atmospheric heat absorbance
     value.
+
     This value is taken directly from Arrhenius' original paper, in which its
     derivation is unclear. Modern heat absorbance would have risen since
     Arrhenius' time.
+
     :return:
         Arrhenius' atmospheric absorbance coefficient
     """
     return STATIC_ATM_ABSORBANCE
 
 
-REQUIRE_TEMP_DATA_INPUT = [landmask_albedo_data]
+REQUIRE_TEMP_DATA_INPUT = [landmask_albedo_data, constant_albedo_data]
 
 PROVIDERS = {
     "temperature": {
         "arrhenius": arrhenius_temperature_data,
         "berkeley": berkeley_temperature_data,
-        "ncar": ncar_temperature_data
+        "ncar": ncar_temperature_data,
     },
     "humidity": {
         "arrhenius": arrhenius_humidity_data,
-        "ncar": ncar_humidity_data
+        "ncar": ncar_humidity_data,
     },
     "albedo": {
-        "landmask": landmask_albedo_data
+        "landmask": landmask_albedo_data,
+        "flat": constant_albedo_data,
     },
     "pressure": {
-        "ncar": ncar_pressure_levels
+        "ncar": ncar_pressure_levels,
     },
 }
 
