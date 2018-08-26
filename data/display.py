@@ -2,6 +2,7 @@ from os import path
 from typing import List, Tuple
 
 from data.resources import OUTPUT_REL_PATH
+from data.reader import NetCDFReader
 from data.writer import NetCDFWriter
 from data.grid import LatLongGrid, GridDimensions,\
     extract_multidimensional_grid_variable
@@ -221,9 +222,12 @@ def write_image_type(data: np.ndarray,
     img_base_name = "_".join([run_id, data_type])
     file_ext = '.png'
 
+    annual_avg = np.array([np.mean(data, axis=0)])
+    data = np.concatenate([annual_avg, data], axis=0)
+
     # Write an image file for each time segment.
     for i in range(len(data)):
-        img_name = "_".join([img_base_name, str(i + 1) + file_ext])
+        img_name = "_".join([img_base_name, str(i) + file_ext])
         img_path = path.join(output_path, img_name)
 
         # Produce and save the image.
