@@ -78,80 +78,139 @@ class ModelRun:
             year_of_interest = self.config[cnf.YEAR]
             self.grids = self.collector.get_gridded_data(year_of_interest)
 
-        # Average values over each latitude band before the model run.
-        if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_BEFORE:
-            self.grids = [grid.latitude_bands() for grid in self.grids]
+        # # Average values over each latitude band before the model run.
+        # if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_BEFORE:
+        #     self.grids = [grid.latitude_bands() for grid in self.grids]
 
         # Run the body of the model, calculating temperature changes for each
         # cell in the grid.
-        if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MULTILAYER:
-            for time in self.grids:
-                iterators = []
-                pressures = []
-                for grid in time:
-                    iterators.append(grid.__iter__())
-                    pressures.append(grid.get_pressure())
-                pressures.pop(0)
+        counter = 1
+        for time_seg in self.grids:
+            place = "th" if (not 1 <= counter % 10 <= 3) \
+                            and (not 10 < counter < 20) \
+                else "st" if counter % 10 == 1 \
+                else "nd" if counter % 10 == 2 \
+                else "rd"
+            report = "Preparing model run on {}{} grid".format(counter, place)
+            self.output_controller.submit_output(out_cnf.Debug.PRINT_NOTICES, report)
 
-                # merges terms in each iterator into a Tuple; returns
-                # single iterator over Tuples
-                cell_iterator = zip(*iterators)
+            if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MULTILAYER:
+                self.compute_multilayer(time_seg, init_co2, new_co2)
 
-                # replace dummy array below with pressures later!
-                layer_dims = pressures_to_layer_dimensions(pressures)
+            else:
+                self.compute_single_layer(time_seg[0], init_co2, new_co2)
 
-                for layered_cell in cell_iterator:
-                    new_temps = self.calculate_layered_cell_temperature(init_co2,
-                                                                        new_co2,
-                                                                        pressures,
-                                                                        layer_dims,
-                                                                        layered_cell)
-                    for cell_num in range(len(layered_cell)):
-                        layered_cell[cell_num].set_temperature(new_temps[cell_num])
-                print("HAFAL")
-                return self.grids
-
-        else:
-            counter = 1
-            for grid in self.grids:
-                place = "th" if (not 1 <= counter % 10 <= 3) \
-                                and (not 10 < counter < 20) \
-                    else "st" if counter % 10 == 1 \
-                    else "nd" if counter % 10 == 2 \
-                    else "rd"
-                report = "Preparing model run on {}{} grid".format(counter, place)
-                self.output_controller.submit_output(out_cnf.Debug.PRINT_NOTICES, report)
-
-                if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_TABLE:
-                    for cell in grid:
-                        new_temp = self.calculate_arr_cell_temperature(init_co2,
-                                                                       new_co2,
-                                                                       cell)
-                        cell.set_temperature(new_temp)
-
-                elif self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MODERN:
-                    for cell in grid:
-                        new_temp = self.calculate_modern_cell_temperature(init_co2,
-                                                                          new_co2,
-                                                                          cell)
-                        cell.set_temperature(new_temp)
-
-                counter += 1
+            counter += 1
 
         # # Average values over each latitude band after the model run.
         # if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_AFTER:
         #     self.grids = [grid.latitude_bands() for grid in self.grids]
-        #
+
+        ground_layer = [time_seg[0] for time_seg in self.grids]
+
         # self.print_statistic_tables()
-        #
-        # # Finally, write model output to disk.
-        # out_cnf.global_output_center().submit_collection_output(
-        #     out_cnf.PRIMARY_OUTPUT_PATH,
-        #     self.grids,
-        #     self.config[cnf.RUN_ID]
-        # )
+
+        # Finally, write model output to disk.
+        out_cnf.global_output_center().submit_collection_output(
+            out_cnf.PRIMARY_OUTPUT_PATH,
+            ground_layer,
+            self.config[cnf.RUN_ID]
+        )
 
         return self.grids
+
+    def compute_single_layer(self: 'ModelRun',
+                             grid: 'LatLongGrid',
+                             init_co2: float,
+                             final_co2: float) -> None:
+        """
+        Perform a series of model calculations on the surface data in grid,
+        computing temperature difference after changing from init_co2 to
+        final_co2 atmospheric carbon dioxide concentrations. Both these
+        concentrations are multipliers of the atmosphere that was modern to
+        the gridded data provided.
+
+        Values of init_co2 other than 1 are not supported.
+
+        The recalculation is sensitive to configuration options, and will
+        choose whichever transparency data mode was specified therein.
+
+        Changes are recorded by updating the temperature values for each cell
+        in the grid, and nothing is returned.
+
+        :param grid:
+            A single layer of gridded data containing temperature, humidity,
+            and surface albedo
+        :param init_co2:
+            A multiplier of atmospheric CO2 concentration for initial state
+        :param final_co2:
+            A multiplier of atmospheric CO2 concentration for final state
+        """
+        if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_TABLE:
+            temp_recalculator = self.calculate_arr_cell_temperature
+        elif self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MODERN:
+            temp_recalculator = self.calculate_modern_cell_temperature
+        else:
+            raise ValueError("Unsupported single-layer temperature function: "
+                             "{}".format(self.config[cnf.ABSORBANCE_SRC]))
+
+        for cell in grid:
+            new_temp = temp_recalculator(init_co2, final_co2, cell)
+            cell.set_temperature(new_temp)
+
+    def compute_multilayer(self: 'ModelRun',
+                           grid_column: List['LatLongGrid'],
+                           init_co2: float,
+                           final_co2: float) -> None:
+        """
+        Perform a series of model calculations on a list of multiple ground
+        and atmospheric layers inside grid_column, computing temperature
+        difference for all layers after changing from init_co2 to final_co2
+        atmospheric carbon dioxide concentrations. Both these concentrations
+        are multipliers of the atmosphere that was modern to the gridded data
+        provided.
+
+        As the surface counts as a layer on its own, even a one-layer
+        atmosphere requires a list of two grids: one for surface, one for the
+        atmosphere. In general, an n-layer atmosphere requires n+1 grids. The
+        first index must be the surface grid, the second index the first
+        atmospheric layer, and so on.
+
+        The surface layer grid can omit humidity and pressure values;
+        atmospheric grids may omit albedo values.
+
+        Changes are recorded by updating the temperature values for each cell
+        in the grid, and nothing is returned.
+
+        :param grid_column:
+            A list of surface and atmosphere data grids, in order of height
+        :param init_co2:
+            A multiplier of atmospheric CO2 concentration for initial state
+        :param final_co2:
+            A multiplier of atmospheric CO2 concentration for final state
+        """
+        iterators = []
+        pressures = []
+        for grid in grid_column:
+            iterators.append(grid.__iter__())
+            pressures.append(grid.get_pressure())
+        # Remove first element in the pressure list, as the surface has
+        # no defined pressure.
+        pressures.pop(0)
+
+        # Prepare an iterator over a whole atmospheric column of grid cells.
+        cell_iterator = zip(*iterators)
+
+        layer_dims = pressures_to_layer_dimensions(pressures)
+
+        for atm_column in cell_iterator:
+            new_temps = self.calculate_layered_cell_temperature(init_co2,
+                                                                final_co2,
+                                                                pressures,
+                                                                layer_dims,
+                                                                atm_column)
+            for cell_num in range(len(atm_column)):
+                atm_column[cell_num].set_temperature(new_temps[cell_num])
 
     def print_statistic_tables(self: 'ModelRun') -> None:
         """
