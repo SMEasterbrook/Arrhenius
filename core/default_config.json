@@ -20,5 +20,6 @@
     "albedo_src": "flat",
     "absorbance_src": "table",
     "CO2_weight": "mean",
-    "H2O_weight": "mean"
+    "H2O_weight": "mean",
+    "scale": [-8, 8]
 }

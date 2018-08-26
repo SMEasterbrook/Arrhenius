@@ -282,6 +282,7 @@ def from_dict(options: Dict[str, str]) -> Config:
         A configuration object based on the dictionary, with some strings
         being replaced with non-serializable objects they identify.
     """
+    options['scale'] = tuple(options['scale'])
     config = {k: v for k, v in options.items()}
 
     # Generate a hash value from the options, which are all strings or

@@ -82,6 +82,14 @@
         "H2O_weight": {
             "type": "string",
 	    "enum": ["closest", "low", "high", "mean"]
+        },
+        "scale": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+                "type": "number"
+            }
         }
     },
 
