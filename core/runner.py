@@ -31,10 +31,6 @@ class ModelRun:
     and output controls.
     """
 
-    config: Dict[str, object]
-    output_controller: object
-    grids: List['LatLongGrid']
-
     def __init__(self: 'ModelRun',
                  config: Dict[str, object],
                  output_controller: 'OutputController') -> None:
@@ -59,20 +55,15 @@ class ModelRun:
             .use_pressure_source(config[cnf.PRESSURE_SRC])
 
     def run_model(self: 'ModelRun',
-                  init_co2: float,
-                  new_co2: float,
                   expected: Optional[np.ndarray] = None) -> GriddedData:
         """
         Calculate Earth's surface temperature change due to a change in
-        CO2 levels from init_co2 to new_co2.
+        CO2 levels given in the model runner's configuration.
+
         Returns a list of grids, each of which represents the state of the
         Earth's surface over a range of time. The grids contain data produced
         from the model run.
 
-        :param init_co2:
-            The initial amount of CO2 in the atmosphere
-        :param new_co2:
-            The new amount of CO2 in the atmosphere
         :param expected:
             An array of expected temperature change values in table format
         :return:
@@ -82,6 +73,10 @@ class ModelRun:
 
         year_of_interest = self.config[cnf.YEAR]
         self.grids = self.collector.get_gridded_data(year_of_interest)
+
+        init_co2 = self.config[cnf.CO2_RANGE][cnf.CO2_INIT]
+        final_co2 = self.config[cnf.CO2_RANGE][cnf.CO2_FINAL]
+        iterations = self.config[cnf.NUM_ITERS]
 
         # Average values over each latitude band before the model run.
         if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_BEFORE:
@@ -100,10 +95,12 @@ class ModelRun:
             self.output_controller.submit_output(out_cnf.Debug.PRINT_NOTICES, report)
 
             if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MULTILAYER:
-                self.compute_multilayer(time_seg, init_co2, new_co2)
+                self.compute_multilayer(time_seg, init_co2,
+                                        final_co2, iterations)
 
             else:
-                self.compute_single_layer(time_seg[0], init_co2, new_co2)
+                self.compute_single_layer(time_seg[0], init_co2,
+                                          final_co2, iterations)
 
             counter += 1
 
@@ -608,4 +605,4 @@ if __name__ == '__main__':
     out_cont.enable_output_type(out_cnf.AccuracyMetrics.TEMP_DELTA_VARIANCE)
 
     model = ModelRun(conf, out_cont)
-    grids = model.run_model(1, 2)
+    grids = model.run_model(X2_EXPECTED)
