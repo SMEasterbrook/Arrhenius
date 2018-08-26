@@ -421,6 +421,70 @@ class ModelOutput:
                                                    scale)
 
 
+def save_from_dataset(dataset_parent: str,
+                      run_id: str,
+                      var_name: str,
+                      time_seg: int,
+                      scale: Tuple[float, float] = (-8, 8)) -> bool:
+    """
+    Produce a set of image outputs based on a dataset, written by a
+    previous run of the Arrhenius model. This dataset is stored in the
+    directory given by the path dataset_parent, and is named run_id.
+    run_id need not include the .nc file extension.
+
+    The images produced are under the variable var_name in the dataset,
+    and only in the time unit given by time_seg. If time_seg is 0, then
+    one image will be produced containing averages over the datapoints
+    in all time units.
+
+    The colourbar boundaries on any of these images are given by the
+    scale parameter.
+
+    Returns True iff a new image was produced by this call, i.e. iff it
+    did not exist prior to the call.
+
+    :param dataset_parent:
+        A path to the directory containing the dataset
+    :param run_id:
+        The name of the dataset, as well as of the output image files
+    :param var_name:
+        The variable from the dataset that will be used to generate the images
+    :param time_seg:
+        An integer specifying which time unit to use data from
+    :param scale:
+        The lower and upper limits to the colorbar on each image
+    :return:
+        True iff a new image file was created
+    """
+    # Locate or create a directory to contain image files.
+    parent_path = path.join(dataset_parent, var_name)
+    Path(parent_path).mkdir(exist_ok=True)
+
+    # Detect if the desired image file already exists.
+    file_name = "_".join([run_id, var_name, str(time_seg)])
+    img_path = path.join(parent_path, file_name)
+    created = Path(img_path).is_file()
+
+    if created:
+        # Locate the dataset and read the desired variable from it.
+        dataset_path = path.join(dataset_parent, run_id + ".nc")
+        reader = NetCDFReader(dataset_path)
+        data = reader.collect_untimed_data(var_name)
+
+        # Extract only the requested parts of the data.
+        if time_seg == 0:
+            selected_time_data = data.mean(axis=0)
+        else:
+            selected_time_data = data[time_seg - 1]
+
+        # Write the new image file.
+        img_writer = ModelImageRenderer(selected_time_data)
+        img_writer.save_image(img_path, scale)
+        reader.close()
+
+    return created
+
+
 def write_model_output(data: List['LatLongGrid'],
                        run_title: str,
                        scale: Tuple[float, float] = (-8, 8)) -> None:
