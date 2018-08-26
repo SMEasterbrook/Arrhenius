@@ -22,7 +22,6 @@ OUTPUT_FULL_PATH = path.join(Path('.').absolute(), OUTPUT_REL_PATH)
 
 # Keys in the dictionary below.
 VAR_TYPE = "Type"
-VAR_RANGE = "Range"
 
 VAR_ATTRS = "Attrs"
 VAR_UNITS = "Units"
@@ -32,7 +31,6 @@ VAR_DESCRIPTION = "Desc"
 VARIABLE_METADATA = {
     ReportDatatype.REPORT_TEMP.value: {
         VAR_TYPE: np.float32,
-        VAR_RANGE: (-60, 60),
         VAR_ATTRS: {
             VAR_UNITS: "Degrees Celsius",
             VAR_DESCRIPTION: "Final temperature of the grid cell that is"
@@ -42,7 +40,6 @@ VARIABLE_METADATA = {
     },
     ReportDatatype.REPORT_TEMP_CHANGE.value: {
         VAR_TYPE: np.float32,
-        VAR_RANGE: (-8, 8),
         VAR_ATTRS: {
             VAR_UNITS: "Degrees Celsius",
             VAR_DESCRIPTION: "Temperature change observed due to CO2 change"
@@ -52,7 +49,6 @@ VARIABLE_METADATA = {
     },
     ReportDatatype.REPORT_HUMIDITY.value: {
         VAR_TYPE: np.float32,
-        VAR_RANGE: (0, 100),
         VAR_ATTRS: {
             VAR_UNITS: "Percent Saturation",
             VAR_DESCRIPTION: "Final relative humidity of the grid cell"
@@ -62,7 +58,6 @@ VARIABLE_METADATA = {
     },
     ReportDatatype.REPORT_ALBEDO.value: {
         VAR_TYPE: np.float32,
-        VAR_RANGE: (0.5, 1),
         VAR_ATTRS: {
             VAR_UNITS: "Decimal Absorption",
             VAR_DESCRIPTION: "Percent of incoming solar energy absorbed"
@@ -103,7 +98,7 @@ class ModelImageRenderer:
 
     def save_image(self: 'ModelImageRenderer',
                    out_path: str,
-                   min_max_grades: Tuple[int, int] = (-60, 60)) -> None:
+                   min_max_grades: Tuple[float, float] = (-8, 8)) -> None:
         """
         Produces a .PNG formatted image file containing the gridded data
         overlaid on a map projection.
@@ -192,7 +187,8 @@ class ModelImageRenderer:
 def write_image_type(data: np.ndarray,
                      output_path: str,
                      data_type: str,
-                     run_id: str) -> None:
+                     run_id: str,
+                     scale: Tuple[float, float] = (-8, 8)) -> None:
     """
     Write out a category of output, given by the parameter data, to a
     directory with the name given by output_path. One image file will
@@ -213,7 +209,10 @@ def write_image_type(data: np.ndarray,
         The name of the variable on which the data is based
     :param run_id:
         A unique name for the current model run
+    :param scale:
+        The lower and upper limits to the colorbar on each image
     """
+    Path(output_path).mkdir(exist_ok=True)
     output_center = global_output_center()
     output_center.submit_output(Debug.PRINT_NOTICES,
                                 "Preparing to write {} images"
@@ -227,13 +226,11 @@ def write_image_type(data: np.ndarray,
         img_name = "_".join([img_base_name, str(i + 1) + file_ext])
         img_path = path.join(output_path, img_name)
 
-        Path(output_path).mkdir(exist_ok=True)
-
         # Produce and save the image.
         output_center.submit_output(Debug.PRINT_NOTICES,
                                     "\tSaving image file {}...".format(i))
         g = ModelImageRenderer(data[i])
-        g.save_image(img_path, VARIABLE_METADATA[data_type][VAR_RANGE])
+        g.save_image(img_path, scale)
 
 
 class ModelOutput:
@@ -349,7 +346,8 @@ class ModelOutput:
     def write_images(self: 'ModelOutput',
                      data: List['LatLongGrid'],
                      output_path: str,
-                     run_id: str = "") -> None:
+                     run_id: str = "",
+                     scale: Tuple[float, float] = (-8, 8)) -> None:
         """
         Produce a series of maps displaying some of the results of an
         Arrhenius model run according to what variable the output controller
@@ -367,6 +365,8 @@ class ModelOutput:
             The directory where image files will be stored
         :param run_id:
             A prefix that will start off the names of all the image files
+        :param scale:
+            The lower and upper limits to the colorbar on each image
         """
         output_controller = global_output_center()
 
@@ -380,10 +380,12 @@ class ModelOutput:
             output_controller.submit_output(output_type, variable,
                                             img_type_path,
                                             variable_name,
-                                            run_id)
+                                            run_id,
+                                            scale)
 
     def write_output(self: 'ModelOutput',
-                     run_title: str) -> None:
+                     run_title: str,
+                     scale: Tuple[float, float] = (-8, 8)) -> None:
         """
         Produce NetCDF data files and image files from the provided data, and
         a directory with the name dir_name to hold them.
@@ -391,6 +393,12 @@ class ModelOutput:
         One image file is created per time segment in the data. In the
         case of Arrhenius' model, this is one per season. Only one NetCDF data
         file is produced, in which all time segments are present.
+
+        :param run_title:
+            A unique name for the output directory, associated with the model
+            run's unique configuration
+        :param scale:
+            The lower and upper limits to the colorbar on each image
         """
         # Create a directory for this model output if none exists already.
         out_dir_path = path.join(OUTPUT_FULL_PATH, run_title)
@@ -405,11 +413,13 @@ class ModelOutput:
         output_controller.submit_collection_output((IMAGES,),
                                                    self._data,
                                                    out_dir_path,
-                                                   run_title)
+                                                   run_title,
+                                                   scale)
 
 
 def write_model_output(data: List['LatLongGrid'],
-                       output_title: str) -> None:
+                       run_title: str,
+                       scale: Tuple[float, float] = (-8, 8)) -> None:
     """
     Write the results of a model run (data) to disk, in the form of a
     NetCDF dataset and a series of image files arranged into a directory
@@ -417,8 +427,11 @@ def write_model_output(data: List['LatLongGrid'],
 
     :param data:
         The output from an Arrhenius model run
-    :param output_title:
-        A unique name for the output directory
+    :param run_title:
+            A unique name for the output directory, associated with the model
+            run's unique configuration
+    :param scale:
+        The lower and upper limits to the colorbar on each image
     """
     writer = ModelOutput(data)
     controller = global_output_center()
@@ -436,4 +449,4 @@ def write_model_output(data: List['LatLongGrid'],
                                              (IMAGES,),
                                              write_image_type)
 
-    writer.write_output(output_title)
+    writer.write_output(run_title, scale)

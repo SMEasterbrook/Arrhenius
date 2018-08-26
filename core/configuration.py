@@ -34,6 +34,7 @@ NUM_LAYERS = "layers"
 NUM_ITERS = "iters"
 AGGREGATE_LAT = "aggregate_lat"
 AGGREGATE_LEVEL = "aggregate_level"
+COLORBAR_SCALE = "scale"
 # Names of data providers to use.
 TEMP_SRC = "temp_src"
 HUMIDITY_SRC = "humidity_src"
@@ -282,7 +283,7 @@ def from_dict(options: Dict[str, str]) -> Config:
         A configuration object based on the dictionary, with some strings
         being replaced with non-serializable objects they identify.
     """
-    options['scale'] = tuple(options['scale'])
+    options[COLORBAR_SCALE] = tuple(options[COLORBAR_SCALE])
     config = {k: v for k, v in options.items()}
 
     # Generate a hash value from the options, which are all strings or

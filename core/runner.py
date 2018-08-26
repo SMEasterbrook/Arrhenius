@@ -118,7 +118,8 @@ class ModelRun:
         out_cnf.global_output_center().submit_collection_output(
             out_cnf.PRIMARY_OUTPUT_PATH,
             ground_layer,
-            self.config[cnf.RUN_ID]
+            self.config[cnf.RUN_ID],
+            self.config[cnf.COLORBAR_SCALE]
         )
 
         return self.grids
