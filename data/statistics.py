@@ -114,6 +114,7 @@ X3_EXPECTED = [[nan, nan, nan, nan],
                [nan, nan, nan, nan],
                [nan, nan, nan, nan]]
 
+
 def convert_grid_data_to_table(data: np.ndarray) -> np.ndarray:
     """
     Returns an array, representing the average values within the latitude
@@ -291,7 +292,6 @@ def print_tables(*tables) -> None:
     for row in first_as_strs:
         print(row)
     print()
-
 
 
 def sum_table(table: Union[np.ndarray, int],

@@ -430,10 +430,6 @@ def default_output_config() -> 'OutputController':
     """
     controller = empty_output_config()
 
-    # Set primary output handler function.
-    # Placeholder is print until a proper output function is developed.
-    controller.register_collection(PRIMARY_OUTPUT, handler=print)
-
     # Add output types to collections.
     for output_type in ReportDatatype:
         controller.enable_output_type(output_type, DATASET_VARS_PATH)
@@ -458,10 +454,6 @@ def development_output_config() -> 'OutputController':
     """
     controller = empty_output_config()
 
-    # Set primary output handler function.
-    # Placeholder is print until a proper output function is developed.
-    controller.register_collection(PRIMARY_OUTPUT, handler=print)
-
     # Add output types to collections.
     controller.enable_output_type(Debug.PRINT_NOTICES, PRIMARY_OUTPUT_PATH)
     controller.enable_output_type(ReportDatatype.REPORT_TEMP_CHANGE,
@@ -476,13 +468,9 @@ def development_output_config() -> 'OutputController':
     return controller
 
 
-# Keys into thread-specific variables dictionary
-OUTPUT = "Out_Center"
-
 # Dictionary of thread-specific variables, accessible at global scope.
 # Set up initial state.
 globals = local()
-globals.output = default_output_config()
 
 
 def global_output_center() -> 'OutputController':
@@ -492,7 +480,12 @@ def global_output_center() -> 'OutputController':
     :return:
         The global output controller
     """
-    return globals.output
+    try:
+        return globals.output
+    except AttributeError:
+        default = default_output_config()
+        globals.output = default
+        return default
 
 
 def set_output_center(output_center: 'OutputController') -> None:
