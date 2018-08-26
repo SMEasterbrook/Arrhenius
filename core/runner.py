@@ -13,9 +13,12 @@ import core.multilayer as ml
 import numpy as np
 import math
 
-from typing import List, Dict, Tuple
+from typing import Union, List, Tuple, Dict
 
 ATMOSPHERE_HEIGHT = 50.0
+
+
+GriddedData = Union[LatLongGrid, List]
 
 
 class ModelRun:
@@ -31,18 +34,14 @@ class ModelRun:
     grids: List['LatLongGrid']
 
     def __init__(self, config: Dict[str, object],
-                 output_controller: 'OutputController',
-                 grids: List[List['LatLongGrid']] = None) -> None:
+                 output_controller: 'OutputController') -> None:
         """
-        Initialize the model configurations, the output controller, and the
-        grid of data to run the model upon.
+        Initialize model configuration options to prepare for model runs.
+
         :param config:
-            A dictionary containing the configuration options for the model
+            A dictionary containing configuration options for the model
         :param output_controller:
-            An object that controls the type and format of data that is output
-        :param grids:
-            A list of LatLongGrid objects, each element of which contains data
-            needed to run the model
+            An object that controls which types of outputs are allowed
         """
         self.config = config
         self.output_controller = output_controller
@@ -58,7 +57,7 @@ class ModelRun:
             .use_pressure_source(config[cnf.PRESSURE_SRC])
 
     def run_model(self, init_co2: float,
-                  new_co2: float) -> List[List['LatLongGrid']]:
+                  new_co2: float) -> GriddedData:
         """
         Calculate Earth's surface temperature change due to a change in
         CO2 levels from init_co2 to new_co2.
@@ -74,13 +73,12 @@ class ModelRun:
         """
         out_cnf.set_output_center(self.output_controller)
 
-        if self.grids is None:
-            year_of_interest = self.config[cnf.YEAR]
-            self.grids = self.collector.get_gridded_data(year_of_interest)
+        year_of_interest = self.config[cnf.YEAR]
+        self.grids = self.collector.get_gridded_data(year_of_interest)
 
-        # # Average values over each latitude band before the model run.
-        # if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_BEFORE:
-        #     self.grids = [grid.latitude_bands() for grid in self.grids]
+        # Average values over each latitude band before the model run.
+        if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_BEFORE:
+            self.grids = multigrid_latitude_bands(self.grids)
 
         # Run the body of the model, calculating temperature changes for each
         # cell in the grid.
@@ -102,9 +100,9 @@ class ModelRun:
 
             counter += 1
 
-        # # Average values over each latitude band after the model run.
-        # if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_AFTER:
-        #     self.grids = [grid.latitude_bands() for grid in self.grids]
+        # Average values over each latitude band after the model run.
+        if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_AFTER:
+            self.grids = multigrid_latitude_bands(self.grids)
 
         ground_layer = [time_seg[0] for time_seg in self.grids]
 
@@ -491,9 +489,32 @@ def get_new_temperature(albedo: float,
     return pow((k / denominator), 1 / 4)
 
 
+def multigrid_latitude_bands(grids: GriddedData) -> GriddedData:
+    """
+    Returns a nested list of grid objects, arranged in the same way as
+    the parameter grids, except with each grid's values averaged over
+    each latitude band. That is, each grid in the nested list returned
+    has cells 180 degrees of latitude wide.
+
+    :param grids:
+        A nested list of grids.
+    :return:
+        A parallel nested list of grids averaged by latitude bands
+    """
+    if isinstance(grids, LatLongGrid):
+        return grids.latitude_bands()
+    else:
+        compressed_grids = []
+
+        for subarray in grids:
+            compressed_grids.append(multigrid_latitude_bands(subarray))
+
+        return compressed_grids
+
+
 if __name__ == '__main__':
-    title = "multilayer_1"
-    grid = GridDimensions((4, 4), "count")
+    title = "arrhenius_x2"
+    grid = GridDimensions((10, 20))
     conf = cnf.default_config()
     conf[cnf.RUN_ID] = title
     conf[cnf.AGGREGATE_LAT] = cnf.AGGREGATE_NONE
@@ -513,5 +534,3 @@ if __name__ == '__main__':
 
     model = ModelRun(conf, out_cont)
     grids = model.run_model(1, 2)
-
-    write_model_output(grids[0], title)
