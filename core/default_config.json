@@ -11,13 +11,13 @@
         },
         "repr": "width"
     },
-    "num_layers": 1,
-    "num_iters": 1,
+    "layers": 1,
+    "iters": 1,
     "aggregate_lat": "before",
     "aggregate_level": null,
     "temp_src": "arrhenius",
     "humidity_src": "arrhenius",
-    "albedo_src": "landmask",
+    "albedo_src": "flat",
     "absorbance_src": "table",
     "CO2_weight": "mean",
     "H2O_weight": "mean"

@@ -87,8 +87,8 @@
 
     "required": [
 	    "year",
-	    "num_layers",
-	    "num_iters",
+	    "layers",
+	    "iters",
 	    "aggregate_lat",
 	    "temp_src",
 	    "humidity_src",

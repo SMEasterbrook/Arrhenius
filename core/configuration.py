@@ -27,6 +27,9 @@ WEIGHT_BY_PROXIMITY = "mean"
 RUN_ID = "ID"
 YEAR = "year"
 GRID = "grid"
+CO2_RANGE = "co2"
+CO2_INIT = "from"
+CO2_FINAL = "to"
 NUM_LAYERS = "layers"
 NUM_ITERS = "iters"
 AGGREGATE_LAT = "aggregate_lat"
@@ -298,7 +301,11 @@ def from_dict(options: Dict[str, str]) -> Config:
     config[TEMP_SRC] = PROVIDERS['temperature'][config[TEMP_SRC]]
     config[HUMIDITY_SRC] = PROVIDERS['humidity'][config[HUMIDITY_SRC]]
     config[ALBEDO_SRC] = PROVIDERS['albedo'][config[ALBEDO_SRC]]
-    config[PRESSURE_SRC] = PROVIDERS['pressure'][config[PRESSURE_SRC]]
+
+    if PRESSURE_SRC in config:
+        config[PRESSURE_SRC] = PROVIDERS['pressure'][config[PRESSURE_SRC]]
+    else:
+        config[PRESSURE_SRC] = lambda: None
 
     # Replace string identifying transparency-weighting functions with the
     # functions themselves.
