@@ -129,7 +129,8 @@ class ModelRun:
     def compute_single_layer(self: 'ModelRun',
                              grid: 'LatLongGrid',
                              init_co2: float,
-                             final_co2: float) -> None:
+                             final_co2: float,
+                             iterations: int = 1) -> None:
         """
         Perform a series of model calculations on the surface data in grid,
         computing temperature difference after changing from init_co2 to
@@ -152,6 +153,9 @@ class ModelRun:
             A multiplier of atmospheric CO2 concentration for initial state
         :param final_co2:
             A multiplier of atmospheric CO2 concentration for final state
+        :param iterations:
+            The number of feedback loop calculated for the effects between
+            humidity and atmospheric temperatures
         """
         if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_TABLE:
             temp_recalculator = self.calculate_arr_cell_temperature
@@ -162,13 +166,14 @@ class ModelRun:
                              "{}".format(self.config[cnf.ABSORBANCE_SRC]))
 
         for cell in grid:
-            new_temp = temp_recalculator(init_co2, final_co2, cell)
+            new_temp = temp_recalculator(init_co2, final_co2, cell, iterations)
             cell.set_temperature(new_temp)
 
     def compute_multilayer(self: 'ModelRun',
                            grid_column: List['LatLongGrid'],
                            init_co2: float,
-                           final_co2: float) -> None:
+                           final_co2: float,
+                           iterations: int = 1) -> None:
         """
         Perform a series of model calculations on a list of multiple ground
         and atmospheric layers inside grid_column, computing temperature
@@ -195,6 +200,9 @@ class ModelRun:
             A multiplier of atmospheric CO2 concentration for initial state
         :param final_co2:
             A multiplier of atmospheric CO2 concentration for final state
+        :param iterations:
+            The number of feedback loop calculated for the effects between
+            humidity and atmospheric temperatures
         """
         iterators = []
         pressures = []
@@ -215,18 +223,21 @@ class ModelRun:
                                                                 final_co2,
                                                                 pressures,
                                                                 layer_dims,
-                                                                atm_column)
+                                                                atm_column,
+                                                                iterations)
             for cell_num in range(len(atm_column)):
                 atm_column[cell_num].set_temperature(new_temps[cell_num])
 
     def calculate_arr_cell_temperature(self: 'ModelRun',
-                                   init_co2: float,
-                                   new_co2: float,
-                                   grid_cell: 'GridCell') -> float:
+                                       init_co2: float,
+                                       new_co2: float,
+                                       grid_cell: 'GridCell',
+                                       iterations: int) -> float:
         """
         Calculate the change in temperature of a specific grid cell due to a
         change in CO2 levels in the atmosphere. Uses Arrhenius' absorption
         data.
+
         :param init_co2:
             The initial amount of CO2 in the atmosphere
         :param new_co2:
@@ -234,6 +245,9 @@ class ModelRun:
         :param grid_cell:
             A GridCell object containing average temperature and
             relative humidity
+        :param iterations:
+            The number of feedback loop calculated for the effects between
+            humidity and atmospheric temperatures
         :return:
             The change in surface temperature for the provided grid cell
             after the given change in CO2
@@ -241,49 +255,46 @@ class ModelRun:
         co2_weight_func = self.config[cnf.CO2_WEIGHT]
         h2o_weight_func = self.config[cnf.H2O_WEIGHT]
 
-        init_temperature = grid_cell.get_temperature() + 273.15
+        temperature = grid_cell.get_temperature() + 273.15
+        init_temperature = temperature
         relative_humidity = grid_cell.get_relative_humidity()
         albedo = grid_cell.get_albedo()
 
-        init_transparency = calculate_transparency(init_co2,
-                                                   init_temperature,
-                                                   relative_humidity,
-                                                   co2_weight_func,
-                                                   h2o_weight_func)
-        k = calibrate_constant(init_temperature, albedo, init_transparency)
+        transparency = calculate_transparency(init_co2,
+                                              temperature,
+                                              relative_humidity,
+                                              co2_weight_func,
+                                              h2o_weight_func)
+        k = calibrate_constant(init_temperature, albedo, transparency)
 
-        mid_transparency = calculate_transparency(new_co2,
-                                                  init_temperature,
+        for i in range(iterations + 1):
+            transparency = calculate_transparency(new_co2,
+                                                  temperature,
                                                   relative_humidity,
                                                   co2_weight_func,
                                                   h2o_weight_func)
-        mid_temperature = get_new_temperature(albedo, mid_transparency, k)
-        final_transparency = calculate_transparency(new_co2,
-                                                    mid_temperature,
-                                                    relative_humidity,
-                                                    co2_weight_func,
-                                                    h2o_weight_func)
-        final_temperature = get_new_temperature(albedo, final_transparency, k)
+            temperature = get_new_temperature(albedo, transparency, k)
 
         delta_temp_report = "{}  ~~~~  Delta T: {} K" \
-            .format(grid_cell, final_temperature - init_temperature)
+            .format(grid_cell, temperature - init_temperature)
         delta_trans_report = "{}  ~~~~  Delta Transparency: {} K" \
-            .format(grid_cell, final_temperature - init_temperature)
+            .format(grid_cell, temperature - init_temperature)
         self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TEMP,
                                              delta_temp_report)
         self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TRANSPARENCY,
                                              delta_trans_report)
 
-        return final_temperature - 273.15
+        return temperature - 273.15
 
     def calculate_modern_cell_temperature(self: 'ModelRun',
-                                   init_co2: float,
-                                   new_co2: float,
-                                   grid_cell: 'GridCell') -> float:
+                                          init_co2: float,
+                                          new_co2: float,
+                                          grid_cell: 'GridCell',
+                                          iterations: int) -> float:
         """
         Calculate the change in temperature of a specific grid cell due to a
-        change in CO2 levels in the atmosphere. Uses Arrhenius' absorption
-        data.
+        change in CO2 levels in the atmosphere. Uses modern absorption data.
+
         :param init_co2:
             The initial amount of CO2 in the atmosphere
         :param new_co2:
@@ -291,93 +302,119 @@ class ModelRun:
         :param grid_cell:
             A GridCell object containing average temperature and
             relative humidity
+        :param iterations:
+            The number of feedback loop calculated for the effects between
+            humidity and atmospheric temperatures
         :return:
             The change in surface temperature for the provided grid cell
             after the given change in CO2
         """
-
         init_temperature = grid_cell.get_temperature() + 273.15
+        temperature = init_temperature
         relative_humidity = grid_cell.get_relative_humidity()
         albedo = grid_cell.get_albedo()
 
-        init_transparency = calculate_modern_transparency(init_co2,
-                                                          init_temperature,
-                                                          relative_humidity,
-                                                          ATMOSPHERE_HEIGHT / 2,
-                                                          ATMOSPHERE_HEIGHT)
-        k = calibrate_constant(init_temperature, albedo, init_transparency)
+        transparency = calculate_modern_transparency(init_co2,
+                                                     temperature,
+                                                     relative_humidity,
+                                                     ATMOSPHERE_HEIGHT / 2,
+                                                     ATMOSPHERE_HEIGHT)
+        k = calibrate_constant(temperature, albedo, transparency)
 
-        mid_transparency = calculate_modern_transparency(new_co2,
-                                                         init_temperature,
+        for i in range(iterations + 1):
+            transparency = calculate_modern_transparency(new_co2,
+                                                         temperature,
                                                          relative_humidity,
                                                          ATMOSPHERE_HEIGHT / 2,
                                                          ATMOSPHERE_HEIGHT)
-        mid_temperature = get_new_temperature(albedo, mid_transparency, k)
-        final_transparency = calculate_modern_transparency(new_co2,
-                                                           mid_temperature,
-                                                           relative_humidity,
-                                                           ATMOSPHERE_HEIGHT / 2,
-                                                           ATMOSPHERE_HEIGHT)
-        final_temperature = get_new_temperature(albedo, final_transparency, k)
+            temperature = get_new_temperature(albedo, transparency, k)
 
         delta_temp_report = "{}  ~~~~  Delta T: {} K" \
-            .format(grid_cell, final_temperature - init_temperature)
+            .format(grid_cell, temperature - init_temperature)
         delta_trans_report = "{}  ~~~~  Delta Transparency: {} K" \
-            .format(grid_cell, final_temperature - init_temperature)
+            .format(grid_cell, temperature - init_temperature)
         self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TEMP,
                                              delta_temp_report)
         self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TRANSPARENCY,
                                              delta_trans_report)
-        return final_temperature - 273.15
+        return temperature - 273.15
 
-    def calculate_layered_cell_temperature(self, init_co2: float,
+    def calculate_layered_cell_temperature(self: 'ModelRun',
+                                           init_co2: float,
                                            new_co2: float,
                                            pressures: List['float'],
                                            layer_dims: List[List[float]],
-                                           layers: Tuple['GridCell']) -> List[float]:
-        init_temps = [layers[0].get_temperature() + 273.15]
-        init_transparencies = [1]
+                                           layers: Tuple['GridCell'],
+                                           iterations: int) -> List[float]:
+        """
+        Calculate the change in temperature in all of a column of grid cells
+        in a multi-layer atmosphere due to a change in CO2 concentration. Uses
+        modern absorption and atmospheric data.
+
+        :param init_co2:
+            The initial amount of CO2 in the atmosphere
+        :param new_co2:
+            The new amount of CO2 in the atmosphere
+        :param pressures:
+            A column of pressures at increasing heights in the atmosphere
+        :param layer_dims:
+            A vector of 2-tuples, containing the bottom altitude and the
+            thickness of each atmospheric layer
+        :param layers:
+            A column of GridCell objects for ground and atmospheric layers,
+            in increasing order of height
+        :param iterations:
+            The number of feedback loop calculated for the effects between
+            humidity and atmospheric temperatures
+        :return:
+            A vector of temperature changes caused by the change in CO2,
+            parallel with the grid cells in the atmospheric column
+        """
+        surface_cell = layers[0]
+        temperatures = [surface_cell.get_temperature() + 273.15]
+        init_temperature = temperatures[0]
+        transparencies = [surface_cell.get_albedo()]
 
         for layer_num in range(len(layers) - 1):
-            init_temps.append(layers[layer_num + 1].get_temperature() + 273.15)
+            temperatures.append(layers[layer_num + 1].get_temperature() + 273.15)
             relative_humidity = layers[layer_num + 1].get_relative_humidity()
             transparency = calculate_modern_transparency(init_co2,
-                                                         init_temps[layer_num + 1],
+                                                         temperatures[layer_num + 1],
                                                          relative_humidity,
                                                          layer_dims[layer_num][0],
                                                          layer_dims[layer_num][1],
                                                          pressures[layer_num])
-            init_transparencies.append(transparency)
-        init_matrix = ml.build_multilayer_matrix(np.array(init_transparencies))
-        coefficients = ml.calibrate_multilayer_matrix(init_matrix,
-                                                      np.array(init_temps))
-        mid_transparencies = [1]
-        for layer_num in range(len(layers) - 1):
-            relative_humidity = layers[layer_num + 1].get_relative_humidity()
-            transparency = calculate_modern_transparency(new_co2,
-                                                         init_temps[layer_num + 1],
-                                                         relative_humidity,
-                                                         layer_dims[layer_num][0],
-                                                         layer_dims[layer_num][1],
-                                                         pressures[layer_num])
-            mid_transparencies.append(transparency)
-        mid_matrix = ml.build_multilayer_matrix(np.array(mid_transparencies))
-        mid_temps = ml.solve_multilayer_matrix(mid_matrix, coefficients)
+            transparencies.append(transparency)
+        init_transparency = transparencies[1]
 
-        final_transparencies = [1]
-        for layer_num in range(len(layers) - 1):
-            relative_humidity = layers[layer_num + 1].get_relative_humidity()
-            transparency = calculate_modern_transparency(new_co2,
-                                                         mid_temps[layer_num + 1],
-                                                         relative_humidity,
-                                                         layer_dims[layer_num][0],
-                                                         layer_dims[layer_num][1],
-                                                         pressures[layer_num])
-            final_transparencies.append(transparency)
-        final_matrix = ml.build_multilayer_matrix(np.array(final_transparencies))
-        final_temps = ml.solve_multilayer_matrix(final_matrix, coefficients)
+        atm_matrix = ml.build_multilayer_matrix(np.array(transparencies))
+        coefficients = ml.calibrate_multilayer_matrix(atm_matrix,
+                                                      np.array(temperatures))
 
-        return final_temps - 273.15
+        for i in range(iterations + 1):
+            transparencies = [surface_cell.get_albedo()]
+            for layer_num in range(len(layers) - 1):
+                relative_humidity = layers[layer_num + 1].get_relative_humidity()
+                transparency = calculate_modern_transparency(new_co2,
+                                                             temperatures[layer_num + 1],
+                                                             relative_humidity,
+                                                             layer_dims[layer_num][0],
+                                                             layer_dims[layer_num][1],
+                                                             pressures[layer_num])
+                transparencies.append(transparency)
+            atm_matrix = ml.build_multilayer_matrix(np.array(transparencies))
+            temperatures = ml.solve_multilayer_matrix(atm_matrix, coefficients)
+
+        delta_temp_report = "{}  ~~~~  Delta T: {} K" \
+            .format(layers[0], temperatures[0] - init_temperature)
+        delta_trans_report = "{}  ~~~~  Delta Transparency: {} K" \
+            .format(layers[1], transparencies[1] - init_transparency)
+        self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TEMP,
+                                             delta_temp_report)
+        self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TRANSPARENCY,
+                                             delta_trans_report)
+
+        return temperatures - 273.15
 
 
 def pressures_to_layer_dimensions(pressures: List[float]) -> List[List[float]]:
