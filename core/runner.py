@@ -4,7 +4,9 @@ from data.grid import LatLongGrid, GridCell, GridDimensions, \
     extract_multidimensional_grid_variable
 from data.collector import ClimateDataCollector
 from data.display import write_model_output
-from data.statistics import convert_grid_data_to_table, print_tables, mean, std_dev, variance, X2_EXPECTED
+from data.statistics import convert_grid_data_to_table, print_tables,\
+    mean, std_dev, variance,\
+    X067_EXPECTED, X15_EXPECTED, X2_EXPECTED, X25_EXPECTED, X3_EXPECTED
 
 import core.configuration as cnf
 import core.output_config as out_cnf
@@ -13,7 +15,7 @@ import core.multilayer as ml
 import numpy as np
 import math
 
-from typing import Union, List, Tuple, Dict
+from typing import Optional, Union, List, Tuple, Dict
 
 ATMOSPHERE_HEIGHT = 50.0
 
@@ -33,7 +35,8 @@ class ModelRun:
     output_controller: object
     grids: List['LatLongGrid']
 
-    def __init__(self, config: Dict[str, object],
+    def __init__(self: 'ModelRun',
+                 config: Dict[str, object],
                  output_controller: 'OutputController') -> None:
         """
         Initialize model configuration options to prepare for model runs.
@@ -45,7 +48,6 @@ class ModelRun:
         """
         self.config = config
         self.output_controller = output_controller
-        self.grids = grids
 
         self.output_controller.register_collection(out_cnf.PRIMARY_OUTPUT,
                                                    handler=write_model_output)
@@ -56,18 +58,23 @@ class ModelRun:
             .use_albedo_source(config[cnf.ALBEDO_SRC]) \
             .use_pressure_source(config[cnf.PRESSURE_SRC])
 
-    def run_model(self, init_co2: float,
-                  new_co2: float) -> GriddedData:
+    def run_model(self: 'ModelRun',
+                  init_co2: float,
+                  new_co2: float,
+                  expected: Optional[np.ndarray] = None) -> GriddedData:
         """
         Calculate Earth's surface temperature change due to a change in
         CO2 levels from init_co2 to new_co2.
         Returns a list of grids, each of which represents the state of the
         Earth's surface over a range of time. The grids contain data produced
         from the model run.
+
         :param init_co2:
             The initial amount of CO2 in the atmosphere
         :param new_co2:
             The new amount of CO2 in the atmosphere
+        :param expected:
+            An array of expected temperature change values in table format
         :return:
             The state of the Earth's surface based on the model's calculations
         """
@@ -106,7 +113,9 @@ class ModelRun:
 
         ground_layer = [time_seg[0] for time_seg in self.grids]
 
-        # self.print_statistic_tables()
+        print_solo_statistics(ground_layer)
+        if expected is not None:
+            print_relation_statistics(ground_layer, expected)
 
         # Finally, write model output to disk.
         out_cnf.global_output_center().submit_collection_output(
@@ -209,54 +218,6 @@ class ModelRun:
                                                                 atm_column)
             for cell_num in range(len(atm_column)):
                 atm_column[cell_num].set_temperature(new_temps[cell_num])
-
-    def print_statistic_tables(self: 'ModelRun') -> None:
-        """
-        Display a series of tables and statistics based on model run results.
-        Which outputs are displayed is determined by the current output
-        controller, and its settings under the SpecialReportDatatype and
-        ReportDatatype categories.
-        """
-        output_center = out_cnf.global_output_center()
-
-        # Prepare data tables.
-        temp_name = out_cnf.ReportDatatype.REPORT_TEMP.value
-        delta_t_name = out_cnf.ReportDatatype.REPORT_TEMP_CHANGE.value
-
-        temp_data = \
-            extract_multidimensional_grid_variable(self.grids, temp_name)
-        temp_table = convert_grid_data_to_table(temp_data)
-
-        output_center.submit_output(out_cnf.ReportDatatype.REPORT_TEMP,
-                                    temp_table)
-
-        delta_temp_data = \
-            extract_multidimensional_grid_variable(self.grids, delta_t_name)
-        delta_temp_table = convert_grid_data_to_table(delta_temp_data)
-
-        # Print tables of data.
-        output_center.submit_output(
-            out_cnf.ReportDatatype.REPORT_TEMP_CHANGE,
-            delta_temp_table
-        )
-
-        expected = X2_EXPECTED
-        diff = expected - delta_temp_table
-
-        output_center.submit_output(
-            out_cnf.SpecialReportData.REPORT_DELTA_TEMP_DEVIATIONS,
-            diff
-        )
-
-        output_center.submit_output(
-            out_cnf.AccuracyMetrics.TEMP_DELTA_AVG_DEVIATION,
-            mean(diff)
-        )
-
-        output_center.submit_output(
-            out_cnf.AccuracyMetrics.TEMP_DELTA_STD_DEVIATION,
-            std_dev(diff)
-        )
 
     def calculate_arr_cell_temperature(self: 'ModelRun',
                                    init_co2: float,
@@ -510,6 +471,83 @@ def multigrid_latitude_bands(grids: GriddedData) -> GriddedData:
             compressed_grids.append(multigrid_latitude_bands(subarray))
 
         return compressed_grids
+
+
+def print_solo_statistics(data: GriddedData) -> None:
+    """
+    Display a series of tables and statistics based on model run results.
+    Which outputs are displayed is determined by the current output
+    controller, and its settings under the SpecialReportDatatype and
+    ReportDatatype categories.
+    """
+    output_center = out_cnf.global_output_center()
+
+    # Prepare data tables.
+    temp_name = out_cnf.ReportDatatype.REPORT_TEMP.value
+    delta_t_name = out_cnf.ReportDatatype.REPORT_TEMP_CHANGE.value
+
+    temp_data = \
+        extract_multidimensional_grid_variable(data, temp_name)
+    temp_table = convert_grid_data_to_table(temp_data)
+
+    output_center.submit_output(out_cnf.ReportDatatype.REPORT_TEMP,
+                                temp_table)
+
+    delta_temp_data = \
+        extract_multidimensional_grid_variable(data, delta_t_name)
+    delta_temp_table = convert_grid_data_to_table(delta_temp_data)
+
+    # Print tables of data.
+    output_center.submit_output(
+        out_cnf.ReportDatatype.REPORT_TEMP_CHANGE,
+        delta_temp_table
+    )
+
+
+def print_relation_statistics(data: GriddedData,
+                              expected: np.ndarray) -> None:
+    """
+    Print a series of tables and statistics based on the relation between
+    model run results, given by data, and an array of expected results for
+    temperature change, given by the parameter expected.
+
+    The expected results must have dimensions appropriate to the model data
+    in table format. Table format reduces the number of dimensions of the data
+    by one, by aggregating latitude bands. Otherwise, the dimensions of the
+    data remain in the same order (time, level, longitude).
+
+    :param data:
+        A nested list of model run results
+    :param expected:
+        An array of expected temperature change values for the model run
+    """
+    delta_t_name = out_cnf.ReportDatatype.REPORT_TEMP_CHANGE.value
+    delta_temp_data = \
+        extract_multidimensional_grid_variable(data, delta_t_name)
+    delta_temp_table = convert_grid_data_to_table(delta_temp_data)
+
+    output_center = out_cnf.global_output_center()
+    diff = expected - delta_temp_table
+
+    output_center.submit_output(
+        out_cnf.SpecialReportData.REPORT_DELTA_TEMP_DEVIATIONS,
+        diff
+    )
+
+    output_center.submit_output(
+        out_cnf.AccuracyMetrics.TEMP_DELTA_AVG_DEVIATION,
+        mean(diff)
+    )
+
+    output_center.submit_output(
+        out_cnf.AccuracyMetrics.TEMP_DELTA_STD_DEVIATION,
+        std_dev(diff)
+    )
+
+    output_center.submit_output(
+        out_cnf.AccuracyMetrics.TEMP_DELTA_VARIANCE,
+        variance(diff)
+    )
 
 
 if __name__ == '__main__':
