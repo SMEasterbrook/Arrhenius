@@ -128,7 +128,7 @@ class ModelImageRenderer:
             A tuple containing the boundary values for the colorbar shown in
             the image file
         """
-        if len(min_max_grades) != 2:
+        if min_max_grades is not None and len(min_max_grades) != 2:
             raise ValueError("Color grade boundaries must be given in a tuple"
                              "of length 2 (is length {})"
                              .format(len(min_max_grades)))
@@ -158,11 +158,34 @@ class ModelImageRenderer:
 
         # Overlap the gridded data on top of the map, and display a colour
         # legend with the appropriate boundaries.
-        img = map.pcolormesh(x, y, self._data, cmap=plt.cm.get_cmap("jet"))
-        map.colorbar(img)
+        img_bin = map.pcolormesh(x, y, self._data, cmap=plt.cm.get_cmap("jet"))
+
+        map.colorbar(img_bin)
         plt.clim(min_max_grades[0], min_max_grades[1])
-        # Save the image and clear added components from memory
-        plt.savefig(out_path)
+
+        fig = plt.gcf()
+        fig.canvas.draw()
+        pixels = fig.canvas.tostring_rgb()
+        img = np.fromstring(pixels, dtype=np.uint8, sep='')
+        img = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        img = img[118:-113, 80:-30, :]
+
+        alphas = np.ones(img.shape[:2], dtype=np.uint8) * 255
+        alphas[:, -65:-57] = 0
+        alphas[:9, :-43] = 0
+        alphas[-8:, :-43] = 0
+
+        for i in range(img.shape[0]):
+            for j in range(img.shape[1] - 43, img.shape[1]):
+                pixel = tuple(img[i, j, :])
+                # if sum(pixel) == 765:
+                if sum(pixel) < 450 and j >= img.shape[1] - 33:
+                    img[i, j, :] = [147, 149, 152]
+                elif j >= img.shape[1] - 33 or i < 9 or i > img.shape[0] - 9:
+                    alphas[i, j] = 0
+
+        img = np.dstack((img, alphas))
+        plt.imsave(fname=out_path, arr=img)
         plt.close()
 
 
