@@ -353,7 +353,7 @@ def ncar_pressure_levels() -> np.array:
 
 def landmask_albedo_data(temp_data: np.ndarray,
                          grid: 'GridDimensions'
-                         = GridDimensions((10, 20))) -> np.array:
+                         = GridDimensions((10, 20))) -> np.ndarray:
     """
     A data provider returning 1-degree gridded surface albedo data
     for land and ocean. Uses Arrhenius' albedo scheme, in which all
@@ -421,7 +421,7 @@ def landmask_albedo_data(temp_data: np.ndarray,
 
                 # Grid cells are identified as containing snow based on having
                 # land at a temperature below 0 degrees celsius.
-                if temp_row[k] < 0:
+                if temp_row[k] < -15:
                     # Any land in this cell is interpreted as being covered in
                     # snow.
                     albedo_mask[i][j][k] = land_percent * snow_albedo\
@@ -472,6 +472,7 @@ def static_absorbance_data() -> float:
 
 
 REQUIRE_TEMP_DATA_INPUT = [landmask_albedo_data, constant_albedo_data]
+
 
 PROVIDERS = {
     "temperature": {

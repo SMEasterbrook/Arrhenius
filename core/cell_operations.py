@@ -1,8 +1,9 @@
 import numpy as np
 from core.configuration import WeightFunc
-from lowtran import userhoriztrans
 
+from lowtran import userhoriztrans
 from typing import Dict, Tuple
+
 
 # Constants for absolute humidity calculations
 CONST_A = 4.6543
