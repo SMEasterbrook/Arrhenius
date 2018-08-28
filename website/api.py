@@ -1,4 +1,5 @@
 from flask import request, jsonify, send_from_directory
+from typing import Dict
 from website import app
 
 from os import path
@@ -43,6 +44,44 @@ example_config = {
     "CO2_weight": ["closest", "low", "high", "mean"],
     "H2O_weight": ["closest", "low", "high", "mean"],
 }
+
+
+def ensure_model_results(config: Dict) -> (str, bool):
+    """
+    Guarantee that the model run with configuration options given by config
+    has been run, and its output is present on disk. Returns a full path to
+    the output directory, followed by a boolean flag that is True iff a new
+    model run was required to compute the results; that is, the results were
+    not already cached.
+
+    If a model run has been previously made on the same configuration as
+    config and the results of this run are still locally available, then no
+    model runs or other computationally-intensive steps will be taken.
+    However, if the specific configuration options have not been received
+    before, or their results erased from disk, then the model run may be
+    very time-intensive.
+
+    :param config:
+        Configuration for the model run
+    :return:
+        A 2-tuple containing a path to the output directory, followed by
+        whether the model output was not already on disk.
+    """
+    run_id = str(config[RUN_ID])
+    dataset_parent = path.join(OUTPUT_FULL_PATH, run_id)
+    created = False
+
+    if not Path(dataset_parent).exists():
+        # Model run on the provided configuration options has not been run;
+        # run it, producing the output directory as well as image files for
+        # the requested variable.
+        output_center = default_output_config()
+
+        run = ModelRun(config, output_center)
+        run.run_model()
+        created = True
+
+    return dataset_parent, created
 
 
 @app.route('/model/help', methods=['GET'])
