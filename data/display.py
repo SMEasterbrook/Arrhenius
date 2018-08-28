@@ -463,9 +463,8 @@ def save_from_dataset(dataset_parent: str,
     # Detect if the desired image file already exists.
     file_name = "_".join([run_id, var_name, str(time_seg)])
     img_path = path.join(parent_path, file_name)
-    created = Path(img_path).is_file()
 
-    if created:
+    if not Path(img_path).is_file():
         # Locate the dataset and read the desired variable from it.
         dataset_path = path.join(dataset_parent, run_id + ".nc")
         reader = NetCDFReader(dataset_path)
@@ -481,6 +480,10 @@ def save_from_dataset(dataset_parent: str,
         img_writer = ModelImageRenderer(selected_time_data)
         img_writer.save_image(img_path, scale)
         reader.close()
+
+        created = True
+    else:
+        created = False
 
     return created
 
