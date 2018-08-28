@@ -86,6 +86,44 @@ def ensure_model_results(config: Dict) -> (str, bool):
     return dataset_parent, created
 
 
+def ensure_image_output(ds_parent: str,
+                        var_name: str,
+                        time_seg: int,
+                        config: Dict) -> (str, bool):
+    """
+    Guarantee that an image file has been produced representing the
+    time_seg'th time unit of variable var_name from the NetCDF dataset
+    file contained in path ds_parent, presumably produced by a previous
+    model run. Returns a path to the directory containing the image,
+    as well as a boolean flag that is True iff the image was created.
+
+    config provides some additional information that is useful for
+    identifying names of files and directories. It is not used to launch
+    any new model runs. Namely, if a dataset has not been created inside
+    directory ds_parent, then no new dataset will be created, and this
+    function will fail.
+
+    :param ds_parent:
+        A path to the directory containing a dataset to pull data from
+    :param var_name:
+        The name of the variable in the dataset that is to be rendered
+    :param time_seg:
+        The time unit from which data is to be extracted
+    :param config:
+        Additional configuration options specifying model run details
+    :return:
+        A 2-tuple containing a path to the directory containing the image,
+        followed by whether the image was not already on disk.
+    """
+    run_id = str(config[RUN_ID])
+    img_parent = path.join(ds_parent, var_name)
+
+    created = save_from_dataset(ds_parent, run_id, var_name, time_seg,
+                                config[COLORBAR_SCALE])
+
+    return img_parent, created
+
+
 @app.route('/model/help', methods=['GET'])
 def config_options():
     """
@@ -163,16 +201,11 @@ def single_model_data(varname: str, time_seg: str):
 
     parent_dir, model_created = ensure_model_results(config)
 
-    download_path = path.join(parent_dir, varname)
+    # Find and access the requested image file, or create it if necessary.
+    download_path, img_created = ensure_image_output(parent_dir, varname,
+                                                     int(time_seg), config)
     file_name = "_".join([run_id, varname, time_seg + ".png"])
     file_path = path.join(download_path, file_name)
-
-    # Find and return the requested image file from the output directory.
-    img_created = False
-    if not Path(file_path).exists():
-        save_from_dataset(parent_dir, run_id, varname, int(time_seg),
-                          config[COLORBAR_SCALE])
-        img_created = True
 
     # Read the binary image file and encode in Base64 encoding.
     fp = open(file_path, "rb")
