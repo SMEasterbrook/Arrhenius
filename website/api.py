@@ -6,12 +6,12 @@ from os import path
 from pathlib import Path
 import shutil
 
-from core.configuration import from_json_string, RUN_ID
+from core.configuration import from_json_string, RUN_ID, COLORBAR_SCALE
 from core.output_config import ReportDatatype, IMAGES_PATH,\
     default_output_config
 from core.runner import ModelRun
 
-from data.display import OUTPUT_FULL_PATH
+from data.display import OUTPUT_FULL_PATH, save_from_dataset
 from data.provider import PROVIDERS
 
 
@@ -116,29 +116,15 @@ def scientific_dataset():
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
     run_id = str(config[RUN_ID])
-    response_code = 200
-
     dataset_name = run_id + ".nc"
-    dataset_parent = path.join(OUTPUT_FULL_PATH, run_id)
 
-    if not Path(dataset_parent, dataset_name).is_file():
-        # Model run on the provided configuration options has not been run;
-        # run it, producing the output directory as well as image files for
-        # the requested variable.
-        output_center = default_output_config()
+    # Check to make sure the requested dataset is available on disk,
+    # create it if necessary.
+    dataset_parent, created = ensure_model_results(config)
+    response_code = 201 if created else 200
 
-        # Use initial and final CO2 levels from request body if present, but
-        # replace with 1 and 2 if not specified.
-        init_co2 = float(config.get("co2", 1).get("from", 1))
-        final_co2 = float(config.get("co2", 2).get("to", 2))
-
-        run = ModelRun(config, output_center)
-        run.run_model(init_co2, final_co2)
-        response_code = 201
-
-    # Send the zip file attached to the HTTP response.
-    return send_from_directory(dataset_parent, dataset_name),\
-        response_code
+    # Send the dataset file attached to the HTTP response.
+    return send_from_directory(dataset_parent, dataset_name), response_code
 
 
 @app.route('/model/<varname>/<time_seg>', methods=['POST'])
@@ -167,28 +153,21 @@ def single_model_data(varname: str, time_seg: str):
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
     run_id = str(config[RUN_ID])
-    response_code = 200
 
-    if not Path(OUTPUT_FULL_PATH, run_id, varname).exists():
-        # Model run on the provided configuration options has not been run;
-        # run it, producing the output directory as well as image files for
-        # the requested variable.
-        output_center = default_output_config()
-        output_center.enable_output_type(var_name_to_output_type[varname],
-                                         IMAGES_PATH)
-
-        # Use initial and final CO2 levels from request body if present, but
-        # replace with 1 and 2 if not specified.
-        init_co2 = float(config.get("co2", 1).get("from", 1))
-        final_co2 = float(config.get("co2", 2).get("to", 2))
-
-        run = ModelRun(config, output_center)
-        run.run_model(init_co2, final_co2)
-        response_code = 201
+    parent_dir, model_created = ensure_model_results(config)
 
     # Find and return the requested image file from the output directory.
-    download_path = path.join(OUTPUT_FULL_PATH, run_id, varname)
+    download_path = path.join(parent_dir, varname)
     file_name = "_".join([run_id, varname, time_seg + ".png"])
+    file_path = path.join(download_path, file_name)
+
+    img_created = False
+    if not Path(file_path).exists():
+        save_from_dataset(parent_dir, run_id, varname, int(time_seg),
+                          config[COLORBAR_SCALE])
+        img_created = True
+
+    response_code = 201 if model_created or img_created else 200
     return send_from_directory(download_path, file_name), response_code
 
 
@@ -212,38 +191,22 @@ def multi_model_data(varname: str):
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
     run_id = str(config[RUN_ID])
-    response_code = 200
 
     # This series of zip-file-related names makes the purpose of each
     # more recognizable, but is not really necessary.
-    archive_name = "_".join([run_id, varname]) + ".zip"
+    archive_name = "_".join([run_id, varname])
     archive_src = path.join(OUTPUT_FULL_PATH, run_id, varname)
-    archive_parent = path.join(OUTPUT_FULL_PATH, run_id)
+
+    archive_parent, model_created = ensure_model_results(config)
     archive_path = path.join(archive_parent, archive_name)
 
-    if not Path(OUTPUT_FULL_PATH, run_id, varname).exists():
-        # Model run on the provided configuration options has not been run;
-        # run it, producing the output directory as well as image files for
-        # the requested variable.
-        output_center = default_output_config()
-        output_center.enable_output_type(var_name_to_output_type[varname],
-                                         IMAGES_PATH)
-
-        # Use initial and final CO2 levels from request body if present, but
-        # replace with 1 and 2 if not specified.
-        init_co2 = float(config.get("co2", 1).get("from", 1))
-        final_co2 = float(config.get("co2", 2).get("to", 2))
-
-        run = ModelRun(config, output_center)
-        run.run_model(init_co2, final_co2)
-        response_code = 201
-
-    if not Path(archive_path).is_file():
+    if not Path(archive_path + ".zip").is_file():
         # The zip file has not been made yet: zip the directory for
         # image files in the requested variable.
-        shutil.make_archive(archive_path[:-4], 'zip', archive_src)
+        shutil.make_archive(archive_path, 'zip', archive_src)
 
     # Send the zip file attached to the HTTP response.
+    response_code = 201 if model_created else 200
     return send_from_directory(archive_parent, archive_name),\
         response_code
 
