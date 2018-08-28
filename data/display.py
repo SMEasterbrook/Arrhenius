@@ -461,7 +461,7 @@ def save_from_dataset(dataset_parent: str,
     Path(parent_path).mkdir(exist_ok=True)
 
     # Detect if the desired image file already exists.
-    file_name = "_".join([run_id, var_name, str(time_seg)])
+    file_name = "_".join([run_id, var_name, str(time_seg)]) + ".png"
     img_path = path.join(parent_path, file_name)
 
     if not Path(img_path).is_file():
