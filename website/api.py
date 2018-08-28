@@ -6,16 +6,23 @@ from os import path
 from pathlib import Path
 
 from base64 import b64encode
+from threading import Lock
 import shutil
 
 from core.configuration import from_json_string, RUN_ID, COLORBAR_SCALE
-from core.output_config import ReportDatatype, IMAGES_PATH,\
-    default_output_config
+from core.output_config import ReportDatatype, default_output_config
 from core.runner import ModelRun
 
 from data.display import OUTPUT_FULL_PATH, save_from_dataset
 from data.provider import PROVIDERS
 
+
+# A lock that protects the image file system from concurrent access.
+# Prevents image writing from being interrupted by a subsequent call
+# on the same dataset.
+# Consider replacing with one lock per set of run IDs, for improved
+# concurrency.
+img_fs_lock = Lock()
 
 var_name_to_output_type = {
     output_type.value: output_type for output_type in ReportDatatype
@@ -202,8 +209,11 @@ def single_model_data(varname: str, time_seg: str):
     parent_dir, model_created = ensure_model_results(config)
 
     # Find and access the requested image file, or create it if necessary.
+    img_fs_lock.acquire()
     download_path, img_created = ensure_image_output(parent_dir, varname,
                                                      int(time_seg), config)
+    img_fs_lock.release()
+
     file_name = "_".join([run_id, varname, time_seg + ".png"])
     file_path = path.join(download_path, file_name)
 
