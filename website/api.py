@@ -1,9 +1,11 @@
-from flask import request, jsonify, send_from_directory
+from flask import request, Response, jsonify, send_from_directory
 from typing import Dict
 from website import app
 
 from os import path
 from pathlib import Path
+
+from base64 import b64encode
 import shutil
 
 from core.configuration import from_json_string, RUN_ID, COLORBAR_SCALE
@@ -142,13 +144,18 @@ def single_model_data(varname: str, time_seg: str):
     More specifically, the image file is the time_seg'th map produced for
     variable varname under the relevant model run.
 
+    The image file returned is a Base64-encoded PNG file. Browsers may
+    interpret the file as a string rather than as an image. This is
+    recognized as a design flaw and will be fixed in the future.
+
     :param varname:
         The name of the variable that is overlaid on the map
     :param time_seg:
         A specifier for which month, season, or general time gradation
         the map should represent
     :return:
-        An HTTP response with the requested image file attached
+        An HTTP response with the requested image file attached, as a
+        Base64-encoded PNG file
     """
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
@@ -156,19 +163,26 @@ def single_model_data(varname: str, time_seg: str):
 
     parent_dir, model_created = ensure_model_results(config)
 
-    # Find and return the requested image file from the output directory.
     download_path = path.join(parent_dir, varname)
     file_name = "_".join([run_id, varname, time_seg + ".png"])
     file_path = path.join(download_path, file_name)
 
+    # Find and return the requested image file from the output directory.
     img_created = False
     if not Path(file_path).exists():
         save_from_dataset(parent_dir, run_id, varname, int(time_seg),
                           config[COLORBAR_SCALE])
         img_created = True
 
+    # Read the binary image file and encode in Base64 encoding.
+    fp = open(file_path, "rb")
+    img_encoded = b64encode(fp.read())
+    fp.close()
+
+    # Send the Base64-encoded image attached to the HTTP response.
     response_code = 201 if model_created or img_created else 200
-    return send_from_directory(download_path, file_name), response_code
+    content_type = "Content-Type: image/png; charset=base64"
+    return Response(img_encoded, response_code, mimetype=content_type)
 
 
 @app.route('/model/<varname>', methods=['POST'])
