@@ -304,10 +304,10 @@ def ncar_humidity_data(grid: 'GridDimensions'
     # Regrid the humidity variable to the specified grid, if necessary.
     regridded_humidity = _regrid_netcdf_variable(humidity, grid, 4)
 
-    grid_by_count = grid.dims_by_count()
-    top_atm_shape = (humidity.shape[0], 5, grid_by_count[0], grid_by_count[1])
-    high_layer_humidity = np.zeros(top_atm_shape)
-    regridded_humidity = np.hstack((regridded_humidity, high_layer_humidity))
+    # grid_by_count = grid.dims_by_count()
+    # top_atm_shape = (humidity.shape[0], 5, grid_by_count[0], grid_by_count[1])
+    # high_layer_humidity = np.zeros(top_atm_shape)
+    # regridded_humidity = np.hstack((regridded_humidity, high_layer_humidity))
 
     return regridded_humidity
 
@@ -326,9 +326,9 @@ def ncar_temperature_data(grid: 'GridDimensions'
     """
     dataset = custom_readers.NCEPReader('temperature')
 
-    temp = dataset.collect_timed_layered_data('air', year)
+    temp = dataset.collect_timed_layered_data('air', year) - 273.15
 
-    # Regrid the humidity variable to the specified grid, if necessary.
+    # Regrid the temperature variable to the specified grid, if necessary.
     regridded_temp = _regrid_netcdf_variable(temp, grid, 4)
     ground_temp = regridded_temp[:, 0, ...]
     ground_temp = ground_temp[:, np.newaxis, ...]

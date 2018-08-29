@@ -7,7 +7,7 @@ from data.grid import LatLongGrid, GridDimensions,\
     extract_multidimensional_grid_variable
 
 from core.output_config import global_output_center, ReportDatatype, Debug,\
-    DATASET_VARS, IMAGES
+    DATASET_VARS, IMAGES, IMAGES_PATH, DATASET_VARS_PATH
 
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap
@@ -210,7 +210,7 @@ def write_image_type(data: np.ndarray,
         output_center.submit_output(Debug.PRINT_NOTICES,
                                     "\tSaving image file {}...".format(i))
         g = ModelImageRenderer(data[i])
-        g.save_image(img_path, VARIABLE_METADATA[data_type][VAR_RANGE])
+        g.save_image(img_path, (-1, 1))
 
 
 class ModelOutput:

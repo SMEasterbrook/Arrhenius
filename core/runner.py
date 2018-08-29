@@ -28,7 +28,7 @@ class ModelRun:
 
     config: Dict[str, object]
     output_controller: object
-    grids: List['LatLongGrid']
+    grids: List[List['LatLongGrid']]
 
     def __init__(self, config: Dict[str, object],
                  output_controller: 'OutputController',
@@ -108,35 +108,41 @@ class ModelRun:
                                                                         layered_cell)
                     for cell_num in range(len(layered_cell)):
                         layered_cell[cell_num].set_temperature(new_temps[cell_num])
-                print("HAFAL")
-                return self.grids
+
+                out_cnf.global_output_center().submit_collection_output(
+                    out_cnf.PRIMARY_OUTPUT_PATH,
+                    self.grids[0],
+                    self.config[cnf.RUN_ID]
+                )
+            return self.grids
 
         else:
             counter = 1
-            for grid in self.grids:
-                place = "th" if (not 1 <= counter % 10 <= 3) \
-                                and (not 10 < counter < 20) \
-                    else "st" if counter % 10 == 1 \
-                    else "nd" if counter % 10 == 2 \
-                    else "rd"
-                report = "Preparing model run on {}{} grid".format(counter, place)
-                self.output_controller.submit_output(out_cnf.Debug.PRINT_NOTICES, report)
+            for time in self.grids:
+                for grid in time:
+                    place = "th" if (not 1 <= counter % 10 <= 3) \
+                                    and (not 10 < counter < 20) \
+                        else "st" if counter % 10 == 1 \
+                        else "nd" if counter % 10 == 2 \
+                        else "rd"
+                    report = "Preparing model run on {}{} grid".format(counter, place)
+                    self.output_controller.submit_output(out_cnf.Debug.PRINT_NOTICES, report)
 
-                if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_TABLE:
-                    for cell in grid:
-                        new_temp = self.calculate_arr_cell_temperature(init_co2,
-                                                                       new_co2,
-                                                                       cell)
-                        cell.set_temperature(new_temp)
+                    if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_TABLE:
+                        for cell in grid:
+                            new_temp = self.calculate_arr_cell_temperature(init_co2,
+                                                                           new_co2,
+                                                                           cell)
+                            cell.set_temperature(new_temp)
 
-                elif self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MODERN:
-                    for cell in grid:
-                        new_temp = self.calculate_modern_cell_temperature(init_co2,
-                                                                          new_co2,
-                                                                          cell)
-                        cell.set_temperature(new_temp)
+                    elif self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MODERN:
+                        for cell in grid:
+                            new_temp = self.calculate_modern_cell_temperature(init_co2,
+                                                                              new_co2,
+                                                                              cell)
+                            cell.set_temperature(new_temp)
 
-                counter += 1
+                    counter += 1
 
         # # Average values over each latitude band after the model run.
         # if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_AFTER:
@@ -318,7 +324,7 @@ class ModelRun:
                                            layer_dims: List[List[float]],
                                            layers: Tuple['GridCell']) -> List[float]:
         init_temps = [layers[0].get_temperature() + 273.15]
-        init_transparencies = [1]
+        init_transparencies = [0]
 
         for layer_num in range(len(layers) - 1):
             init_temps.append(layers[layer_num + 1].get_temperature() + 273.15)
@@ -329,11 +335,13 @@ class ModelRun:
                                                          layer_dims[layer_num][0],
                                                          layer_dims[layer_num][1],
                                                          pressures[layer_num])
+            if(transparency > 1):
+                print("Cell: " + str(init_temps[layer_num + 1]) + " " + str(relative_humidity) + " " + str(layer_dims[layer_num][0]))
             init_transparencies.append(transparency)
         init_matrix = ml.build_multilayer_matrix(np.array(init_transparencies))
         coefficients = ml.calibrate_multilayer_matrix(init_matrix,
                                                       np.array(init_temps))
-        mid_transparencies = [1]
+        mid_transparencies = [0]
         for layer_num in range(len(layers) - 1):
             relative_humidity = layers[layer_num + 1].get_relative_humidity()
             transparency = calculate_modern_transparency(new_co2,
@@ -346,7 +354,7 @@ class ModelRun:
         mid_matrix = ml.build_multilayer_matrix(np.array(mid_transparencies))
         mid_temps = ml.solve_multilayer_matrix(mid_matrix, coefficients)
 
-        final_transparencies = [1]
+        final_transparencies = [0]
         for layer_num in range(len(layers) - 1):
             relative_humidity = layers[layer_num + 1].get_relative_humidity()
             transparency = calculate_modern_transparency(new_co2,
@@ -454,5 +462,3 @@ if __name__ == '__main__':
 
     model = ModelRun(conf, out_cont)
     grids = model.run_model(1, 2)
-
-    write_model_output(grids[0], title)

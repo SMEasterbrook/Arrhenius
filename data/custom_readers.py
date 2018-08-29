@@ -116,8 +116,3 @@ class NCEPReader(TimeboundNetCDFReader):
 
     def longitude(self: 'NCEPReader') -> ndarray:
         return self.collect_untimed_data("lon")
-
-
-if __name__ == '__main__':
-    faab = NCEPReader("temperature")
-    faab._open_dataset()
