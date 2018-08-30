@@ -1,0 +1,5 @@
+pkginfo>=1.4.2
+requests!=2.15,!=2.16,>=2.5.0
+requests-toolbelt>=0.8.0
+setuptools>=0.7.0
+tqdm>=4.14

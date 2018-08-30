@@ -1,18 +1,28 @@
-from flask import request, jsonify, send_from_directory
+from flask import request, Response, jsonify, send_from_directory
+from typing import Dict
 from website import app
 
 from os import path
 from pathlib import Path
+
+from base64 import b64encode
+from threading import Lock
 import shutil
 
-from core.configuration import from_json_string, RUN_ID
-from core.output_config import ReportDatatype, IMAGES_PATH,\
-    default_output_config
+from core.configuration import from_json_string, RUN_ID, COLORBAR_SCALE
+from core.output_config import ReportDatatype, default_output_config
 from core.runner import ModelRun
 
-from data.display import OUTPUT_FULL_PATH
+from data.display import OUTPUT_FULL_PATH, save_from_dataset
 from data.provider import PROVIDERS
 
+
+# A lock that protects the image file system from concurrent access.
+# Prevents image writing from being interrupted by a subsequent call
+# on the same dataset.
+# Consider replacing with one lock per set of run IDs, for improved
+# concurrency.
+img_fs_lock = Lock()
 
 var_name_to_output_type = {
     output_type.value: output_type for output_type in ReportDatatype
@@ -43,6 +53,82 @@ example_config = {
     "CO2_weight": ["closest", "low", "high", "mean"],
     "H2O_weight": ["closest", "low", "high", "mean"],
 }
+
+
+def ensure_model_results(config: Dict) -> (str, bool):
+    """
+    Guarantee that the model run with configuration options given by config
+    has been run, and its output is present on disk. Returns a full path to
+    the output directory, followed by a boolean flag that is True iff a new
+    model run was required to compute the results; that is, the results were
+    not already cached.
+
+    If a model run has been previously made on the same configuration as
+    config and the results of this run are still locally available, then no
+    model runs or other computationally-intensive steps will be taken.
+    However, if the specific configuration options have not been received
+    before, or their results erased from disk, then the model run may be
+    very time-intensive.
+
+    :param config:
+        Configuration for the model run
+    :return:
+        A 2-tuple containing a path to the output directory, followed by
+        whether the model output was not already on disk.
+    """
+    run_id = str(config[RUN_ID])
+    dataset_parent = path.join(OUTPUT_FULL_PATH, run_id)
+    created = False
+
+    if not Path(dataset_parent).exists():
+        # Model run on the provided configuration options has not been run;
+        # run it, producing the output directory as well as image files for
+        # the requested variable.
+        output_center = default_output_config()
+
+        run = ModelRun(config, output_center)
+        run.run_model()
+        created = True
+
+    return dataset_parent, created
+
+
+def ensure_image_output(ds_parent: str,
+                        var_name: str,
+                        time_seg: int,
+                        config: Dict) -> (str, bool):
+    """
+    Guarantee that an image file has been produced representing the
+    time_seg'th time unit of variable var_name from the NetCDF dataset
+    file contained in path ds_parent, presumably produced by a previous
+    model run. Returns a path to the directory containing the image,
+    as well as a boolean flag that is True iff the image was created.
+
+    config provides some additional information that is useful for
+    identifying names of files and directories. It is not used to launch
+    any new model runs. Namely, if a dataset has not been created inside
+    directory ds_parent, then no new dataset will be created, and this
+    function will fail.
+
+    :param ds_parent:
+        A path to the directory containing a dataset to pull data from
+    :param var_name:
+        The name of the variable in the dataset that is to be rendered
+    :param time_seg:
+        The time unit from which data is to be extracted
+    :param config:
+        Additional configuration options specifying model run details
+    :return:
+        A 2-tuple containing a path to the directory containing the image,
+        followed by whether the image was not already on disk.
+    """
+    run_id = str(config[RUN_ID])
+    img_parent = path.join(ds_parent, var_name)
+
+    created = save_from_dataset(ds_parent, run_id, var_name, time_seg,
+                                config[COLORBAR_SCALE])
+
+    return img_parent, created
 
 
 @app.route('/model/help', methods=['GET'])
@@ -77,29 +163,15 @@ def scientific_dataset():
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
     run_id = str(config[RUN_ID])
-    response_code = 200
-
     dataset_name = run_id + ".nc"
-    dataset_parent = path.join(OUTPUT_FULL_PATH, run_id)
 
-    if not Path(dataset_parent, dataset_name).is_file():
-        # Model run on the provided configuration options has not been run;
-        # run it, producing the output directory as well as image files for
-        # the requested variable.
-        output_center = default_output_config()
+    # Check to make sure the requested dataset is available on disk,
+    # create it if necessary.
+    dataset_parent, created = ensure_model_results(config)
+    response_code = 201 if created else 200
 
-        # Use initial and final CO2 levels from request body if present, but
-        # replace with 1 and 2 if not specified.
-        init_co2 = float(config.get("co2", 1).get("from", 1))
-        final_co2 = float(config.get("co2", 2).get("to", 2))
-
-        run = ModelRun(config, output_center)
-        run.run_model(init_co2, final_co2)
-        response_code = 201
-
-    # Send the zip file attached to the HTTP response.
-    return send_from_directory(dataset_parent, dataset_name),\
-        response_code
+    # Send the dataset file attached to the HTTP response.
+    return send_from_directory(dataset_parent, dataset_name), response_code
 
 
 @app.route('/model/<varname>/<time_seg>', methods=['POST'])
@@ -117,40 +189,43 @@ def single_model_data(varname: str, time_seg: str):
     More specifically, the image file is the time_seg'th map produced for
     variable varname under the relevant model run.
 
+    The image file returned is a Base64-encoded PNG file. Browsers may
+    interpret the file as a string rather than as an image. This is
+    recognized as a design flaw and will be fixed in the future.
+
     :param varname:
         The name of the variable that is overlaid on the map
     :param time_seg:
         A specifier for which month, season, or general time gradation
         the map should represent
     :return:
-        An HTTP response with the requested image file attached
+        An HTTP response with the requested image file attached, as a
+        Base64-encoded PNG file
     """
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
     run_id = str(config[RUN_ID])
-    response_code = 200
 
-    if not Path(OUTPUT_FULL_PATH, run_id, varname).exists():
-        # Model run on the provided configuration options has not been run;
-        # run it, producing the output directory as well as image files for
-        # the requested variable.
-        output_center = default_output_config()
-        output_center.enable_output_type(var_name_to_output_type[varname],
-                                         IMAGES_PATH)
+    parent_dir, model_created = ensure_model_results(config)
 
-        # Use initial and final CO2 levels from request body if present, but
-        # replace with 1 and 2 if not specified.
-        init_co2 = float(config.get("co2", 1).get("from", 1))
-        final_co2 = float(config.get("co2", 2).get("to", 2))
+    # Find and access the requested image file, or create it if necessary.
+    img_fs_lock.acquire()
+    download_path, img_created = ensure_image_output(parent_dir, varname,
+                                                     int(time_seg), config)
+    img_fs_lock.release()
 
-        run = ModelRun(config, output_center)
-        run.run_model(init_co2, final_co2)
-        response_code = 201
-
-    # Find and return the requested image file from the output directory.
-    download_path = path.join(OUTPUT_FULL_PATH, run_id, varname)
     file_name = "_".join([run_id, varname, time_seg + ".png"])
-    return send_from_directory(download_path, file_name), response_code
+    file_path = path.join(download_path, file_name)
+
+    # Read the binary image file and encode in Base64 encoding.
+    fp = open(file_path, "rb")
+    img_encoded = b64encode(fp.read())
+    fp.close()
+
+    # Send the Base64-encoded image attached to the HTTP response.
+    response_code = 201 if model_created or img_created else 200
+    content_type = "Content-Type: image/png; charset=base64"
+    return Response(img_encoded, response_code, mimetype=content_type)
 
 
 @app.route('/model/<varname>', methods=['POST'])
@@ -173,38 +248,22 @@ def multi_model_data(varname: str):
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
     run_id = str(config[RUN_ID])
-    response_code = 200
 
     # This series of zip-file-related names makes the purpose of each
     # more recognizable, but is not really necessary.
-    archive_name = "_".join([run_id, varname]) + ".zip"
+    archive_name = "_".join([run_id, varname])
     archive_src = path.join(OUTPUT_FULL_PATH, run_id, varname)
-    archive_parent = path.join(OUTPUT_FULL_PATH, run_id)
+
+    archive_parent, model_created = ensure_model_results(config)
     archive_path = path.join(archive_parent, archive_name)
 
-    if not Path(OUTPUT_FULL_PATH, run_id, varname).exists():
-        # Model run on the provided configuration options has not been run;
-        # run it, producing the output directory as well as image files for
-        # the requested variable.
-        output_center = default_output_config()
-        output_center.enable_output_type(var_name_to_output_type[varname],
-                                         IMAGES_PATH)
-
-        # Use initial and final CO2 levels from request body if present, but
-        # replace with 1 and 2 if not specified.
-        init_co2 = float(config.get("co2", 1).get("from", 1))
-        final_co2 = float(config.get("co2", 2).get("to", 2))
-
-        run = ModelRun(config, output_center)
-        run.run_model(init_co2, final_co2)
-        response_code = 201
-
-    if not Path(archive_path).is_file():
+    if not Path(archive_path + ".zip").is_file():
         # The zip file has not been made yet: zip the directory for
         # image files in the requested variable.
-        shutil.make_archive(archive_path[:-4], 'zip', archive_src)
+        shutil.make_archive(archive_path, 'zip', archive_src)
 
     # Send the zip file attached to the HTTP response.
+    response_code = 201 if model_created else 200
     return send_from_directory(archive_parent, archive_name),\
         response_code
 

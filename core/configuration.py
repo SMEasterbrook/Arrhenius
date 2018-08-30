@@ -27,15 +27,20 @@ WEIGHT_BY_PROXIMITY = "mean"
 RUN_ID = "ID"
 YEAR = "year"
 GRID = "grid"
+CO2_RANGE = "co2"
+CO2_INIT = "from"
+CO2_FINAL = "to"
 NUM_LAYERS = "layers"
 NUM_ITERS = "iters"
 AGGREGATE_LAT = "aggregate_lat"
 AGGREGATE_LEVEL = "aggregate_level"
+COLORBAR_SCALE = "scale"
 # Names of data providers to use.
 TEMP_SRC = "temp_src"
 HUMIDITY_SRC = "humidity_src"
 ALBEDO_SRC = "albedo_src"
-ABSORBANCE_SRC = "abs_src"
+ABSORBANCE_SRC = "absorbance_src"
+PRESSURE_SRC = "pressure_src"
 CO2_WEIGHT = "CO2_weight"
 H2O_WEIGHT = "H2O_weight"
 
@@ -48,6 +53,10 @@ GRID_FORMAT_LON = "lon"
 AGGREGATE_BEFORE = "before"
 AGGREGATE_AFTER = "after"
 AGGREGATE_NONE = None
+
+ABS_SRC_TABLE = "table"
+ABS_SRC_MODERN = "modern"
+ABS_SRC_MULTILAYER = "multilayer"
 
 
 def weight_by_closest(lower_val: float,
@@ -274,6 +283,7 @@ def from_dict(options: Dict[str, str]) -> Config:
         A configuration object based on the dictionary, with some strings
         being replaced with non-serializable objects they identify.
     """
+    options[COLORBAR_SCALE] = tuple(options[COLORBAR_SCALE])
     config = {k: v for k, v in options.items()}
 
     # Generate a hash value from the options, which are all strings or
@@ -293,6 +303,11 @@ def from_dict(options: Dict[str, str]) -> Config:
     config[TEMP_SRC] = PROVIDERS['temperature'][config[TEMP_SRC]]
     config[HUMIDITY_SRC] = PROVIDERS['humidity'][config[HUMIDITY_SRC]]
     config[ALBEDO_SRC] = PROVIDERS['albedo'][config[ALBEDO_SRC]]
+
+    if PRESSURE_SRC in config:
+        config[PRESSURE_SRC] = PROVIDERS['pressure'][config[PRESSURE_SRC]]
+    else:
+        config[PRESSURE_SRC] = lambda: None
 
     # Replace string identifying transparency-weighting functions with the
     # functions themselves.
