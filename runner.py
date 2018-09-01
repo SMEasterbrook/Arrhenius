@@ -15,6 +15,8 @@ import numpy as np
 import math
 
 from typing import Optional, Union, List, Tuple
+from sys import argv
+from getopt import getopt, GetoptError
 
 ATMOSPHERE_HEIGHT = 50.0
 
@@ -590,8 +592,29 @@ def print_relation_statistics(data: GriddedData,
 
 
 if __name__ == '__main__':
+    if len(argv) > 1:
+        try:
+            # Command-line arguments must consist of a -c followed by the
+            # JSON filename containing configuration options.
+            options, args = getopt(argv[1:], "c:")
+            options_map = {op[0]: op[1] for op in options}
+
+            # Parse config options from file.
+            json_filepath = options_map["-c"]
+            json_file = open(json_filepath, "r")
+            conf = cnf.from_json_string(json_file.read())
+            json_file.close()
+        except (KeyError, GetoptError):
+            # Only catch errors resulting from improper argument passing:
+            # Invalid config errors should propagate.
+            print("Usage: python runner.py -c <config_file>")
+            exit(1)
+
+    else:
+        # If no arguments are given, use default config.
+        conf = cnf.default_config()
+
     title = "arrhenius_x2"
-    conf = cnf.default_config()
     conf.set_run_id(title)
     conf.set_aggregations(agg_lat=cnf.AGGREGATE_NONE)
     conf.set_table_auxiliaries(cnf.WEIGHT_BY_PROXIMITY,
