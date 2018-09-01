@@ -54,14 +54,11 @@
 	    "minimum": 1
         },
         "aggregate_lat": {
-            "type": [
-                "string",
-                "null"
-            ],
-	    "enum": ["before", "after", null]
+            "type": "string",
+	    "enum": ["before", "after", "none"]
         },
 	"aggregate_level": {
-            "enum": ["before", "after", null]
+            "enum": ["before", "after", "none"]
         },
         "temp_src": {
             "type": "string"
