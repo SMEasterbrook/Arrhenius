@@ -11,7 +11,7 @@ import shutil
 
 from core.configuration import from_json_string, RUN_ID, COLORBAR_SCALE
 from core.output_config import ReportDatatype, default_output_config
-from core.runner import ModelRun
+from runner import ModelRun
 
 from data.display import OUTPUT_FULL_PATH, save_from_dataset
 from data.provider import PROVIDERS

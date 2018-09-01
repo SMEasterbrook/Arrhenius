@@ -297,7 +297,7 @@ class ArrheniusConfig:
             for key in vars:
                 if key not in basis:
                     raise InvalidConfigError("\"" + key + "\" is a required"
-                                                        "configuration field")
+                                             "configuration field")
             params = (basis[var] for var in vars)
             loader(*params)
 
@@ -492,15 +492,19 @@ class ArrheniusConfig:
         options = [AGGREGATE_BEFORE, AGGREGATE_AFTER, AGGREGATE_NONE]
         ops_example = ", ".join(options[:-1]) + ", and " + str(options[-1])
 
-        if agg_lat not in options:
-            raise InvalidConfigError("\"aggregate_lat\" must be one of "
-                                     + ops_example + ".")
-        if agg_level not in options:
-            raise InvalidConfigError("\"aggregate_level\" must be one of "
-                                     + ops_example + ".")
+        if agg_lat is not None:
+            if agg_lat not in options:
+                raise InvalidConfigError("\"aggregate_lat\" must be one of "
+                                         + ops_example + " (is {})."
+                                         .format(agg_lat))
+            self._settings[AGGREGATE_LAT] = agg_lat
 
-        self._settings[AGGREGATE_LAT] = agg_lat
-        self._settings[AGGREGATE_LEVEL] = agg_level
+        if agg_level is not None:
+            if agg_level not in options:
+                raise InvalidConfigError("\"aggregate_level\" must be one of "
+                                         + ops_example + " (is {})."
+                                         .format(agg_level))
+            self._settings[AGGREGATE_LEVEL] = agg_level
 
     def set_providers(self: 'ArrheniusConfig',
                       temperature: Optional[str] = None,

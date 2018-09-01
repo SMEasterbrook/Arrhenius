@@ -1,13 +1,12 @@
-from core.cell_operations import calculate_transparency, calculate_modern_transparency
-
-from data.grid import LatLongGrid, GridCell, GridDimensions, \
+from data.grid import LatLongGrid, GridCell,\
     extract_multidimensional_grid_variable
 from data.collector import ClimateDataCollector
 from data.display import write_model_output
 from data.statistics import convert_grid_data_to_table, print_tables,\
-    mean, std_dev, variance,\
-    X067_EXPECTED, X15_EXPECTED, X2_EXPECTED, X25_EXPECTED, X3_EXPECTED
+    mean, std_dev, variance, X2_EXPECTED
 
+from core.cell_operations import calculate_transparency,\
+    calculate_modern_transparency
 import core.configuration as cnf
 import core.output_config as out_cnf
 
@@ -15,7 +14,7 @@ import core.multilayer as ml
 import numpy as np
 import math
 
-from typing import Optional, Union, List, Tuple, Dict
+from typing import Optional, Union, List, Tuple
 
 ATMOSPHERE_HEIGHT = 50.0
 
@@ -32,7 +31,7 @@ class ModelRun:
     """
 
     def __init__(self: 'ModelRun',
-                 config: Dict[str, object],
+                 config: 'ArrheniusConfig',
                  output_controller: 'OutputController') -> None:
         """
         Initialize model configuration options to prepare for model runs.
@@ -48,11 +47,16 @@ class ModelRun:
         self.output_controller.register_collection(out_cnf.PRIMARY_OUTPUT,
                                                    handler=write_model_output)
 
-        self.collector = ClimateDataCollector(config[cnf.GRID]) \
-            .use_temperature_source(config[cnf.TEMP_SRC]) \
-            .use_humidity_source(config[cnf.HUMIDITY_SRC]) \
-            .use_albedo_source(config[cnf.ALBEDO_SRC]) \
-            .use_pressure_source(config[cnf.PRESSURE_SRC])
+        self.collector = ClimateDataCollector(config.grid()) \
+            .use_temperature_source(config.temp_provider()) \
+            .use_humidity_source(config.humidity_provider()) \
+            .use_albedo_source(config.albedo_provider())
+
+        try:
+            self.collector.use_pressure_source(config.pressure_provider())
+        except AttributeError:
+            pass
+
 
     def run_model(self: 'ModelRun',
                   expected: Optional[np.ndarray] = None) -> GriddedData:
@@ -71,15 +75,15 @@ class ModelRun:
         """
         out_cnf.set_output_center(self.output_controller)
 
-        year_of_interest = self.config[cnf.YEAR]
+        year_of_interest = self.config.year()
         self.grids = self.collector.get_gridded_data(year_of_interest)
 
-        init_co2 = self.config[cnf.CO2_RANGE][cnf.CO2_INIT]
-        final_co2 = self.config[cnf.CO2_RANGE][cnf.CO2_FINAL]
-        iterations = self.config[cnf.NUM_ITERS]
+        init_co2 = self.config.init_co2()
+        final_co2 = self.config.final_co2()
+        iterations = self.config.iterations()
 
         # Average values over each latitude band before the model run.
-        if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_BEFORE:
+        if self.config.aggregate_latitude() == cnf.AGGREGATE_BEFORE:
             self.grids = multigrid_latitude_bands(self.grids)
 
         # Run the body of the model, calculating temperature changes for each
@@ -94,7 +98,7 @@ class ModelRun:
             report = "Preparing model run on {}{} grid".format(counter, place)
             self.output_controller.submit_output(out_cnf.Debug.PRINT_NOTICES, report)
 
-            if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MULTILAYER:
+            if self.config.model_mode() == cnf.ABS_SRC_MULTILAYER:
                 self.compute_multilayer(time_seg, init_co2,
                                         final_co2, iterations)
 
@@ -105,7 +109,7 @@ class ModelRun:
             counter += 1
 
         # Average values over each latitude band after the model run.
-        if self.config[cnf.AGGREGATE_LAT] == cnf.AGGREGATE_AFTER:
+        if self.config.aggregate_latitude() == cnf.AGGREGATE_AFTER:
             self.grids = multigrid_latitude_bands(self.grids)
 
         ground_layer = [time_seg[0] for time_seg in self.grids]
@@ -118,8 +122,8 @@ class ModelRun:
         out_cnf.global_output_center().submit_collection_output(
             out_cnf.PRIMARY_OUTPUT_PATH,
             ground_layer,
-            self.config[cnf.RUN_ID],
-            self.config[cnf.COLORBAR_SCALE]
+            self.config.run_id(),
+            self.config.colorbar()
         )
 
         return self.grids
@@ -155,13 +159,14 @@ class ModelRun:
             The number of feedback loop calculated for the effects between
             humidity and atmospheric temperatures
         """
-        if self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_TABLE:
+        if self.config.model_mode() == cnf.ABS_SRC_TABLE:
             temp_recalculator = self.calculate_arr_cell_temperature
-        elif self.config[cnf.ABSORBANCE_SRC] == cnf.ABS_SRC_MODERN:
+        elif self.config.model_mode() == cnf.ABS_SRC_MODERN:
             temp_recalculator = self.calculate_modern_cell_temperature
         else:
-            raise ValueError("Unsupported single-layer temperature function: "
-                             "{}".format(self.config[cnf.ABSORBANCE_SRC]))
+            raise ValueError("Unsupported temperature function for model mode"
+                             "{}: {}".format(self.config.model_mode(),
+                                             self.config.temp_provider()))
 
         for cell in grid:
             new_temp = temp_recalculator(init_co2, final_co2, cell, iterations)
@@ -250,8 +255,7 @@ class ModelRun:
             The change in surface temperature for the provided grid cell
             after the given change in CO2
         """
-        co2_weight_func = self.config[cnf.CO2_WEIGHT]
-        h2o_weight_func = self.config[cnf.H2O_WEIGHT]
+        co2_weight_func, h2o_weight_func = self.config.table_auxiliaries()
 
         temperature = grid_cell.get_temperature() + 273.15
         init_temperature = temperature
@@ -587,12 +591,11 @@ def print_relation_statistics(data: GriddedData,
 
 if __name__ == '__main__':
     title = "arrhenius_x2"
-    grid = GridDimensions((10, 20))
     conf = cnf.default_config()
-    conf[cnf.RUN_ID] = title
-    conf[cnf.AGGREGATE_LAT] = cnf.AGGREGATE_NONE
-    conf[cnf.CO2_WEIGHT] = cnf.weight_by_mean
-    conf[cnf.H2O_WEIGHT] = cnf.weight_by_mean
+    conf.set_run_id(title)
+    conf.set_aggregations(agg_lat=cnf.AGGREGATE_NONE)
+    conf.set_table_auxiliaries(cnf.WEIGHT_BY_PROXIMITY,
+                               cnf.WEIGHT_BY_PROXIMITY)
 
     out_cont = out_cnf.development_output_config()
 
