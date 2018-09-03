@@ -34,7 +34,7 @@ example_config = {
         "from": [1],
         "to": [0.67, 1.0, 1.5, 2.0, 2.5, 3.0]
     },
-    "year": "1895",
+    "year": "int",
     "grid": {
         "dims": {
             "lat": "(0, 180]",
@@ -42,16 +42,18 @@ example_config = {
         },
         "repr": ["count", "width"]
     },
-    "num_layers": "[1, ...)",
-    "num_iters": "[1, ...)",
-    "aggregate_lat": ["before", "after", None],
-    "aggregate_level": ["before", "after"],
+    "layers": "<int >= 1>",
+    "iters": "<int >= 0>",
+    "aggregate_lat": ["before", "after", "none"],
+    "aggregate_level": ["before", "after", "none"],
     "temp_src": [func_name for func_name in PROVIDERS['temperature']],
     "humidity_src": [func_name for func_name in PROVIDERS['humidity']],
     "albedo_src": [func_name for func_name in PROVIDERS['albedo']],
-    "absorbance_src": ["table"],
+    "pressure_src": [func_name for func_name in PROVIDERS['pressure']],
+    "absorbance_src": ["table", "modern", "multilayer"],
     "CO2_weight": ["closest", "low", "high", "mean"],
     "H2O_weight": ["closest", "low", "high", "mean"],
+    "scale": ["<number>", "<number>"],
 }
 
 
