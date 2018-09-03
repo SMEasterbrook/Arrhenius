@@ -1,19 +1,19 @@
-from flask import request, Response, jsonify, send_from_directory
-from typing import Dict
+from flask import request, jsonify, send_from_directory
+from typing import Optional
 from website import app
 
 from os import path
 from pathlib import Path
 
-from base64 import b64encode
 from threading import Lock
 import shutil
 
-from core.configuration import from_json_string, RUN_ID, COLORBAR_SCALE
+from core.configuration import from_json_string, ArrheniusConfig, InvalidConfigError
 from core.output_config import ReportDatatype, default_output_config
-from core.runner import ModelRun
+from runner import ModelRun
 
-from data.display import OUTPUT_FULL_PATH, save_from_dataset
+from data.display import OUTPUT_FULL_PATH, save_from_dataset,\
+    image_file_name, get_image_directory
 from data.provider import PROVIDERS
 
 
@@ -34,7 +34,7 @@ example_config = {
         "from": [1],
         "to": [0.67, 1.0, 1.5, 2.0, 2.5, 3.0]
     },
-    "year": "1895",
+    "year": "int",
     "grid": {
         "dims": {
             "lat": "(0, 180]",
@@ -42,20 +42,22 @@ example_config = {
         },
         "repr": ["count", "width"]
     },
-    "num_layers": "[1, ...)",
-    "num_iters": "[1, ...)",
-    "aggregate_lat": ["before", "after", None],
-    "aggregate_level": ["before", "after"],
+    "layers": "<int >= 1>",
+    "iters": "<int >= 0>",
+    "aggregate_lat": ["before", "after", "none"],
+    "aggregate_level": ["before", "after", "none"],
     "temp_src": [func_name for func_name in PROVIDERS['temperature']],
     "humidity_src": [func_name for func_name in PROVIDERS['humidity']],
     "albedo_src": [func_name for func_name in PROVIDERS['albedo']],
-    "absorbance_src": ["table"],
+    "pressure_src": [func_name for func_name in PROVIDERS['pressure']],
+    "absorbance_src": ["table", "modern", "multilayer"],
     "CO2_weight": ["closest", "low", "high", "mean"],
     "H2O_weight": ["closest", "low", "high", "mean"],
+    "scale": ["<number>", "<number>"],
 }
 
 
-def ensure_model_results(config: Dict) -> (str, bool):
+def ensure_model_results(config: 'ArrheniusConfig') -> (str, bool):
     """
     Guarantee that the model run with configuration options given by config
     has been run, and its output is present on disk. Returns a full path to
@@ -76,7 +78,7 @@ def ensure_model_results(config: Dict) -> (str, bool):
         A 2-tuple containing a path to the output directory, followed by
         whether the model output was not already on disk.
     """
-    run_id = str(config[RUN_ID])
+    run_id = str(config.run_id())
     dataset_parent = path.join(OUTPUT_FULL_PATH, run_id)
     created = False
 
@@ -95,8 +97,8 @@ def ensure_model_results(config: Dict) -> (str, bool):
 
 def ensure_image_output(ds_parent: str,
                         var_name: str,
-                        time_seg: int,
-                        config: Dict) -> (str, bool):
+                        time_seg: Optional[int],
+                        config: 'ArrheniusConfig') -> (str, bool):
     """
     Guarantee that an image file has been produced representing the
     time_seg'th time unit of variable var_name from the NetCDF dataset
@@ -122,11 +124,10 @@ def ensure_image_output(ds_parent: str,
         A 2-tuple containing a path to the directory containing the image,
         followed by whether the image was not already on disk.
     """
-    run_id = str(config[RUN_ID])
-    img_parent = path.join(ds_parent, var_name)
-
-    created = save_from_dataset(ds_parent, run_id, var_name, time_seg,
-                                config[COLORBAR_SCALE])
+    created = save_from_dataset(ds_parent, var_name, time_seg,
+                                config)
+    img_parent = get_image_directory(ds_parent, config.run_id(), var_name,
+                                     config.colorbar(), create=False)
 
     return img_parent, created
 
@@ -162,7 +163,7 @@ def scientific_dataset():
     """
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
-    run_id = str(config[RUN_ID])
+    run_id = str(config.run_id())
     dataset_name = run_id + ".nc"
 
     # Check to make sure the requested dataset is available on disk,
@@ -178,7 +179,8 @@ def scientific_dataset():
 def single_model_data(varname: str, time_seg: str):
     """
     Returns a response to an HTTP request for one image file produced by
-    a run of the Arrhenius model, that are associated with variable varname.
+    a run of the Arrhenius model, that is associated with variable varname
+    and the time unit time_seg (or 0 for average over all time segments).
 
     If the request is a POST request, a configuration dictionary is expected
     in the request body in the form of a JSON string. Assuming the
@@ -189,22 +191,16 @@ def single_model_data(varname: str, time_seg: str):
     More specifically, the image file is the time_seg'th map produced for
     variable varname under the relevant model run.
 
-    The image file returned is a Base64-encoded PNG file. Browsers may
-    interpret the file as a string rather than as an image. This is
-    recognized as a design flaw and will be fixed in the future.
-
     :param varname:
         The name of the variable that is overlaid on the map
     :param time_seg:
         A specifier for which month, season, or general time gradation
         the map should represent
     :return:
-        An HTTP response with the requested image file attached, as a
-        Base64-encoded PNG file
+        An HTTP response with the requested image file attached as raw data
     """
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
-    run_id = str(config[RUN_ID])
 
     parent_dir, model_created = ensure_model_results(config)
 
@@ -214,18 +210,13 @@ def single_model_data(varname: str, time_seg: str):
                                                      int(time_seg), config)
     img_fs_lock.release()
 
-    file_name = "_".join([run_id, varname, time_seg + ".png"])
-    file_path = path.join(download_path, file_name)
+    # Get the file's name and path in preparation for sending to the client.
+    base_name = varname + "_" + str(time_seg)
+    file_name = image_file_name(base_name, config) + ".png"
 
-    # Read the binary image file and encode in Base64 encoding.
-    fp = open(file_path, "rb")
-    img_encoded = b64encode(fp.read())
-    fp.close()
-
-    # Send the Base64-encoded image attached to the HTTP response.
+    # Send the HTTP response with the file contents in its body.
     response_code = 201 if model_created or img_created else 200
-    content_type = "Content-Type: image/png; charset=base64"
-    return Response(img_encoded, response_code, mimetype=content_type)
+    return send_from_directory(download_path, file_name), response_code
 
 
 @app.route('/model/<varname>', methods=['POST'])
@@ -247,23 +238,112 @@ def multi_model_data(varname: str):
     """
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
-    run_id = str(config[RUN_ID])
+    run_id = str(config.run_id())
 
-    # This series of zip-file-related names makes the purpose of each
-    # more recognizable, but is not really necessary.
-    archive_name = "_".join([run_id, varname])
-    archive_src = path.join(OUTPUT_FULL_PATH, run_id, varname)
+    # This series of zip-file-related variables makes the purpose of each
+    # expression more recognizable, but they are not really necessary.
+    scale_suffix = "[{}x{}]".format(*config.colorbar())
+    scale_dir_name = "_".join([run_id, scale_suffix])
+    archive_name = "_".join([run_id, varname, scale_suffix])
 
-    archive_parent, model_created = ensure_model_results(config)
-    archive_path = path.join(archive_parent, archive_name)
+    ds_parent, model_created = ensure_model_results(config)
+    archive_path = path.join(ds_parent, scale_dir_name, archive_name)
 
+    img_created = False
     if not Path(archive_path + ".zip").is_file():
-        # The zip file has not been made yet: zip the directory for
-        # image files in the requested variable.
+        # The zip file has not been made yet: create all image files
+        # for all time units with the requested variable and zip them.
+        archive_src, img_created = ensure_image_output(ds_parent, varname,
+                                                       None, config)
         shutil.make_archive(archive_path, 'zip', archive_src)
 
     # Send the zip file attached to the HTTP response.
-    response_code = 201 if model_created else 200
-    return send_from_directory(archive_parent, archive_name),\
+    response_code = 201 if model_created or img_created else 200
+    return send_from_directory(ds_parent, archive_name + ".zip"),\
         response_code
 
+
+def error_template(title: str,
+                   msg: str) -> str:
+    """
+    Returns HTML markup reporting an error. title is written in a header,
+    and msg is written in a body text block beneath.
+
+    :param title:
+        Text for the header of the HTML page
+    :param msg:
+        Text for the body of the HTML page
+    :return:
+        A string containing HTML markup
+    """
+    head = "<DOCTYPE html>" \
+           + "\n<head>" \
+           + "\n  <title>" + title + "</title>" \
+           + "\n</head>"
+    body = "<body>" \
+           + "\n  <h1>" + title + "</h1>" \
+           + "\n  <hr>" \
+           + "\n  <p>" + msg + "</p>" \
+           + "\n</body>"
+
+    markup = head + "\n" + body
+    return markup
+
+
+@app.errorhandler(InvalidConfigError)
+def handle_invalid_config(err: InvalidConfigError):
+    """
+    Handler for InvalidConfigError, producing an HTML page whenever an API
+    endpoint encounters an error of that type. This page reports details of
+    which part of the configuration was invalid.
+
+    :param err:
+        The InvalidConfigError that triggered the handler
+    :return:
+        An HTTP response to send to the client
+    """
+    return error_template("Invalid Configuration", str(err)), 400
+
+
+@app.errorhandler(IOError)
+def handle_enomem(err: IOError):
+    """
+    Handler for IOErrors in the server, producing an HTML page whenever an API
+    endpoint encounters an error of that type. This page reports whether the
+    error was caused by lack of disk space.
+
+    :param err:
+        The IOError that triggered the handler
+    :return:
+        An HTTP response to send to the client
+    """
+    if err.errno == 28:
+        msg = "The server has insufficient disk space to produce output" \
+              " from a model run, and has failed to either produce a dataset" \
+              " for model results or to write image files from said results." \
+              " Consider placing a request for fewer resources at a time to" \
+              " lighten the load on server while it tries to free up space."
+        return error_template("Insufficient Space", msg), 413
+    else:
+        msg = "The server has failed to perform disk IO, most likely due to a" \
+              " malformed path. Please report this error to project engineers."
+        return error_template("Failed Disk IO", msg), 500
+
+
+@app.errorhandler(500)
+def handle_failure(err):
+    """
+    Handler for any server error that would ordinarily cause a response to be
+    sent with HTTP code 500. Produces an HTML page whenever an API endpoint
+    encounters an error of that type. This page currently does not provide any
+    useful information to the user, but it can be styled in the future.
+
+    :param err:
+        The error that triggered the handler
+    :return:
+        An HTTP response to send to the client
+    """
+    msg = "We are sorry, but our server is still young and has experienced an" \
+          " unexpected error. Please report this error to project engineers to" \
+          " get it patched sooner."
+    return error_template("Internal Error", msg), 500

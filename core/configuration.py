@@ -1,9 +1,13 @@
-from typing import Tuple, Dict, Callable
+from typing import Union, Optional, Tuple, Dict, Callable
+from threading import local
 from os import path
+
 from frozendict import frozendict
+from datetime import datetime
 
 import json
 from jsonschema import validate
+from jsonschema.exceptions import ValidationError
 import xml.etree.ElementTree as ETree
 
 from data.resources import MAIN_PATH
@@ -11,7 +15,7 @@ from data.provider import PROVIDERS
 from data.grid import GridDimensions
 
 # Type aliases
-Config = Dict[str, object]
+Config = 'ArrheniusConfig'
 WeightFunc = Callable[[float, float, float], Tuple[float, float]]
 
 
@@ -52,7 +56,7 @@ GRID_FORMAT_LON = "lon"
 
 AGGREGATE_BEFORE = "before"
 AGGREGATE_AFTER = "after"
-AGGREGATE_NONE = None
+AGGREGATE_NONE = "none"
 
 ABS_SRC_TABLE = "table"
 ABS_SRC_MODERN = "modern"
@@ -229,6 +233,605 @@ def freeze_dict(mutable_dict: Dict) -> frozendict:
     return frozendict(mutable_dict)
 
 
+class InvalidConfigError(ValueError):
+    """
+    An exception class indicating invalid values for a configuration option,
+    which were not checked by schema validation.
+
+    Configuration options can be invalid if integers are out of range, if
+    string enums do not take on an allowed value, or if nested objects do not
+    have the right nesting structure. In all cases, the configuration set is
+    considered unusable and the model run is rejected.
+
+    These errors should typically be raised before a model run, and any
+    attempt to parse to parse configuration from an external source should
+    catch these errors.
+    """
+    pass
+
+
+class ArrheniusConfig:
+    """
+    A condensed configuration object, based on a JSON configuration file. This
+    object provides validity checks for various configuration options,
+    consolidates or separates some options, and converts some string
+    identifiers within the configuration file into the objects they represent.
+
+    Instead of dictionary lookup, the object provides methods for accessing
+    various configuration options. This approach allows a more thorough type
+    contract for each option, specifying that one option is a Callable while
+    another is an int. Simultaneously, it becomes easier to access and update
+    options without having to define key constants, or use some from another
+    module.
+
+    For more specific use cases, the object allows the introduction of new
+    options through standard dictionary notation. This can be used to create
+    short-term options for testing, or custom control options where convenient.
+    """
+    def __init__(self: 'ArrheniusConfig',
+                 basis: Dict) -> None:
+        """
+        Initialize a new Configuration instance, converting the configuration
+        option keys in basis into the configurations they represent.
+
+        Most configuration options are necessary to support full configuration.
+        If any necessary options are not specified in basis, an
+        InvalidConfigError will be raised. This type of error will also be
+        raised if any values violate preconditions.
+
+        :param basis:
+            A JSON object specifying configuration options
+        """
+        self._settings = {}
+
+        def attempt_load(loader: Callable,
+                         *vars: Optional[str]) -> None:
+            """
+            Attemps to call the setter method given be loader to set
+            configuration options associated with the keys given by all
+            other parameters. Raises an InvalidConfigError if the relevant
+            configuration options have not been given a value in basis.
+
+            :param loader:
+                The setter method to load the variables
+            :param vars:
+                The keys associated with the variables
+            """
+            for key in vars:
+                if key not in basis:
+                    raise InvalidConfigError("\"" + key + "\" is a required"
+                                             " configuration field.")
+            params = (basis[var] for var in vars)
+            loader(*params)
+
+        attempt_load(self.set_co2_bounds, "co2")
+        attempt_load(self.set_grid, "grid")
+        attempt_load(self.set_layers, "layers")
+        attempt_load(self.set_iters, "iters")
+        attempt_load(self.set_aggregations,
+                     "aggregate_lat", "aggregate_level")
+        attempt_load(self.set_providers, "temp_src", "humidity_src",
+                                          "albedo_src", "absorbance_src")
+        self.set_colorbar(basis.get("scale", (-8, 8)))
+
+        try:
+            attempt_load(self.set_year, "year")
+        except InvalidConfigError:
+            self._settings[YEAR] = datetime.now().year
+
+        if self._settings[ABSORBANCE_SRC] == ABS_SRC_TABLE:
+            attempt_load(self.set_table_auxiliaries,
+                         "CO2_weight", "H2O_weight")
+        else:
+            # Set None values for all provider keys except pressure,
+            # to prevent them from being changed.
+            attempt_load(self.set_providers,
+                         None, None, None, None, "pressure_src")
+
+        try:
+            attempt_load(self.set_run_id, "run_id")
+        except InvalidConfigError:
+            # Remove any keys from the dictionary that do not affect ID.
+            for ignored_key in [COLORBAR_SCALE]:
+                if ignored_key in basis:
+                    del basis[ignored_key]
+            config_hash_val = abs(freeze_dict(basis).__hash__())
+
+            # Convert to hexadecimal for compaction and remove the 0x
+            # from the front.
+            self._settings[RUN_ID] = hex(config_hash_val)[2:]
+
+    def __setitem__(self: 'ArrheniusConfig',
+                    key: str,
+                    value: object) -> None:
+        """
+        Sets a configuration attribute by the name of key to value.
+        This can be used to add new, custom attributes to a configuration set.
+
+        :param key:
+            The name of the new attribute
+        :param value:
+            The value of the new attribute
+        """
+        self._settings[key] = value
+
+    def __getitem__(self: 'ArrheniusConfig',
+                    key: str) -> object:
+        """
+        Get the value of a configuration by the name of key. This applies to
+        both preexisting attributes and custom attributes.
+
+        :param key:
+            The name of the attribute
+        """
+        try:
+            return self._settings[key]
+        except KeyError:
+            raise AttributeError("No configuration option {} has been set"
+                                 .format(key))
+
+    def set_run_id(self: 'ArrheniusConfig',
+                   run_id: str) -> None:
+        """
+        Sets a value for the model's ID value. If a value is not specified,
+        then a an ID will be chosen automatically based on the configuration
+        options.
+
+        :param run_id:
+            The model run's unique ID
+        """
+        if len(run_id) < 1:
+            raise InvalidConfigError("\"run_id\" cannot be an empty string")
+
+        self._settings[RUN_ID] = run_id
+
+    def set_year(self: 'ArrheniusConfig',
+                 year: int) -> None:
+        """
+        Sets a value for the year option, specifying which year to pull data
+        from in modern or multilayer model runs. If this option is omitted,
+        the current year will be chosen.
+
+        :param year:
+            The year from which model data will be pulled
+        """
+        self._settings[YEAR] = year
+
+    def set_co2_bounds(self: 'ArrheniusConfig',
+                       co2: Dict[str, float]) -> None:
+        """
+        Sets the values for initial and final CO2 concentration multiplier,
+        relative to the value that is current to the chosen year option.
+
+        Settings of these variables should be passed in a dictionary, mapping
+        the string "to" to initial multiplier, and "from" to final multiplier.
+        If either of these keys is omitted, or either value is non-positive,
+        then an InvalidConfigError will be raised.
+
+        :param co2:
+            A dictionary giving initial and final CO2 multipliers.
+        """
+        for param in ["from", "to"]:
+            if param not in co2:
+                raise InvalidConfigError("\"" + param + "\" is a required"
+                                         " field for CO2 configuration")
+
+        if co2["from"] != 1:
+            raise InvalidConfigError("Only initial CO2 values of 1.0 are"
+                                     " currently supported (is {})."
+                                     .format(co2["from"]))
+
+        self._settings[CO2_INIT] = co2["from"]
+        self._settings[CO2_FINAL] = co2["to"]
+
+    def set_grid(self: 'ArrheniusConfig',
+                 grid: Dict[str, Union[str, Dict[str, int]]]) -> None:
+        """
+        Sets the global grid that surface and atmospheric data will be
+        represented on.
+
+        Settings of these variables should be stored in a dictionary, mapping
+        "repr" to the grid's representation type, and "dims" to a nested
+        dictionary storing lat and lon values under those keys. If any of this
+        structure is violated, or the values are invalid for constructing a
+        grid, then an InvalidConfigError will be raised.
+
+        :param grid:
+            A dictionary giving grid dimension specifications
+        """
+        if "dims" not in grid:
+            raise InvalidConfigError("\"dims\" is a required"
+                                     " field for grid specification")
+
+        dims = grid["dims"]
+        for param in ["lat", "lon"]:
+            if param not in dims:
+                raise InvalidConfigError("\"" + param + "\" is a required"
+                                         " field for grid dimensions")
+        dims_tuple = (dims["lat"], dims["lon"])
+        self._settings[GRID] = GridDimensions(dims_tuple, grid.get("repr", "width"))
+
+    def set_layers(self: 'ArrheniusConfig',
+                   layers: int) -> None:
+        """
+        Sets the number of layers that should be used in a multilayer model
+        run. This option is disregarded in any single layer model run.
+
+        :param layers:
+            The number of layers in a multilayer model
+        """
+        if layers < 1:
+            raise InvalidConfigError("Number of layers must be positive"
+                                     " (is {})".format(layers))
+
+        self._settings[NUM_LAYERS] = layers
+
+    def set_iters(self: 'ArrheniusConfig',
+                  iters: int) -> None:
+        """
+        Sets the number of calculation iterations for the humidity-
+        transparency feedback effect.
+
+        :param iters:
+            The number of humidity recalculations per grid cell
+        """
+        if iters < 0:
+            raise InvalidConfigError("Number of feedback iterations must be"
+                                     " non-negative (is {})".format(iters))
+
+        self._settings[NUM_ITERS] = iters
+
+    def set_aggregations(self: 'ArrheniusConfig',
+                         agg_lat: Optional[str] = None,
+                         agg_level: Optional[str] = None) -> None:
+        """
+        Sets one or both of agg_lat and agg_level configuration options,
+        whichever one(s) is/are not None. These options control conversion
+        of model output into an equivalent representation with one latitude
+        layer or one atmospheric layer, respectively.
+
+        :param agg_lat:
+            A key representing the setting of the aggregate latitude option
+        :param agg_level:
+            A key representing the setting of the aggregate level option
+        """
+        options = [AGGREGATE_BEFORE, AGGREGATE_AFTER, AGGREGATE_NONE]
+        ops_example = "\n" + "\", \"".join(options[:-1])\
+                      + "\", and \""+ str(options[-1]) + "\""
+
+        if agg_lat is not None:
+            if agg_lat not in options:
+                raise InvalidConfigError("\"aggregate_lat\" must be one of "
+                                         + ops_example + " (is \"{}\")."
+                                         .format(agg_lat))
+            self._settings[AGGREGATE_LAT] = agg_lat
+
+        if agg_level is not None:
+            if agg_level not in options:
+                raise InvalidConfigError("\"aggregate_level\" must be one of "
+                                         + ops_example + " (is \"{}\")."
+                                         .format(agg_level))
+            self._settings[AGGREGATE_LEVEL] = agg_level
+
+    def set_providers(self: 'ArrheniusConfig',
+                      temperature: Optional[str] = None,
+                      humidity: Optional[str] = None,
+                      albedo: Optional[str] = None,
+                      absorbance: Optional[str] = None,
+                      pressure: Optional[str] = None) -> None:
+        """
+        Sets one or more of the provider functions specified by keys passed
+        through keyword arguments, whichever ones are provided and are not
+        None. The absorbance option additionally gives the model's execution
+        mode, whether it runs with old or new data, single or multiple layers.
+
+        :param temperature:
+            The key for a temperature provider function
+        :param humidity:
+            The key for a humidity provider function
+        :param albedo:
+            The key for an inverse albedo provider function
+        :param absorbance:
+            The absorption mode for the model run
+        :param pressure:
+            The key for a pressure provider function
+        """
+        temp_options = PROVIDERS["temperature"]
+        humidity_options = PROVIDERS["humidity"]
+        albedo_options = PROVIDERS["albedo"]
+        pressure_options = PROVIDERS["pressure"]
+        absorbance_options = [ABS_SRC_TABLE, ABS_SRC_MODERN,
+                              ABS_SRC_MULTILAYER]
+
+        if temperature is not None:
+            if temperature not in temp_options:
+                example = "\"" + "\", \"".join(temp_options.keys()[:-1]) \
+                          + "\", and \"" + temp_options.keys()[-1] + "\""
+                raise InvalidConfigError("Temperature provider must be on of "
+                                         + example + " (is \"{}\")."
+                                         .format(temperature))
+            self._settings[TEMP_SRC] = temp_options[temperature]
+
+        if humidity is not None:
+            if humidity not in humidity_options:
+                example = "\"" + "\", \"".join(humidity_options.keys()[:-1]) \
+                          + "\", and \"" + humidity_options.keys()[-1] + "\""
+                raise InvalidConfigError("Humidity provider must be on of "
+                                         + example + " (is \"{}\")."
+                                         .format(humidity))
+            self._settings[HUMIDITY_SRC] = humidity_options[humidity]
+
+        if albedo is not None:
+            if albedo not in albedo_options:
+                example = "\"" + "\", \"".join(albedo_options.keys()[:-1]) \
+                          + "\", and \"" + albedo_options.keys()[-1] + "\""
+                raise InvalidConfigError("Albedo provider must be on of "
+                                         + example + " (is \"{}\")."
+                                         .format(albedo))
+            self._settings[ALBEDO_SRC] = albedo_options[albedo]
+
+        if absorbance is not None:
+            if absorbance not in absorbance_options:
+                example = "\"" + "\", \"".join(absorbance_options[:-1]) \
+                          + "\", and \"" + absorbance_options[-1] + "\""
+                raise InvalidConfigError("Absorbance mode must be on of "
+                                         + example + " (is \"{}\")."
+                                         .format(absorbance))
+            self._settings[ABSORBANCE_SRC] = absorbance
+
+        if pressure is not None:
+            if absorbance == ABS_SRC_TABLE:
+                raise InvalidConfigError("Pressure provider \"{}\" is invalid"
+                                         " for Arrhenius (\"{}\") data mode."
+                                         .format(pressure, ABS_SRC_TABLE))
+
+            if pressure not in pressure_options:
+                example = "\"" + "\", \"".join(pressure_options.keys()[:-1]) \
+                          + "\", and \"" + pressure_options.keys()[-1] + "\""
+                raise InvalidConfigError("Pressure provider must be on of "
+                                         + example + " (is \"{}\")."
+                                         .format(pressure))
+            self._settings[PRESSURE_SRC] = pressure_options[pressure]
+
+    def set_table_auxiliaries(self: 'ArrheniusConfig',
+                              co2_weight_func: Optional[str] = None,
+                              h2o_weight_func: Optional[str] = None) -> None:
+        """
+        Sets which weight functions are used to interpolate the weights of
+        transparencies for nearest CO2 and H2O values, respectively, for
+        whichever parameters are provided and not None.
+
+        :param co2_weight_func:
+            The key for a transparency weighting function for CO2
+        :param h2o_weight_func:
+            The key for a transparency weighting function for H2O
+        """
+        options = list(_transparency_weight_converter.keys())
+
+        if co2_weight_func in options:
+            self._settings[CO2_WEIGHT] =\
+                _transparency_weight_converter[co2_weight_func]
+        else:
+            example = "\"" + "\", \"".join(options[:-1])\
+                      + "\", and \"" + options[-1] + "\""
+            raise InvalidConfigError("CO2 weight function must be one of "
+                                     + example + " (is \"{}\")."
+                                     .format(co2_weight_func))
+
+        if h2o_weight_func in options:
+            self._settings[H2O_WEIGHT] =\
+                _transparency_weight_converter[h2o_weight_func]
+        else:
+            example = "\"" + "\", \"".join(options[:-1]) \
+                      + "\", and \"" + options[-1] + "\""
+            raise InvalidConfigError("H2O weight function must be one of "
+                                     + example + " (is \"{}\")."
+                                     .format(h2o_weight_func))
+
+    def set_colorbar(self: 'ArrheniusConfig',
+                     colorbar_scale: Tuple[float, float]) -> None:
+        """
+        Sets the lower and upper bounds for the color scale in any images
+        rendered during the model run, given by the first and second elements
+        of colorbar_scale.
+
+        :param colorbar_scale:
+            The bounds on colour values for the model's images
+        """
+        if colorbar_scale[0] >= colorbar_scale[1]:
+            raise InvalidConfigError("Lower bound of colorbar scale must"
+                                     " be less than upper bound ({} >= {})"
+                                     .format(colorbar_scale[0],
+                                             colorbar_scale[1]))
+
+        self._settings[COLORBAR_SCALE] = colorbar_scale
+
+    def run_id(self: 'ArrheniusConfig') -> str:
+        """
+        Returns the unique ID for this model configuration.
+
+        :return:
+            The configuration's ID
+        """
+        return self._settings[RUN_ID]
+
+    def year(self: 'ArrheniusConfig') -> int:
+        """
+        Returns the year from which data will be chosen for the upcoming
+        model run. This parameter is ignored when original Arrhenius data
+        is selected.
+
+        :return:
+            The year from which model data will be pulled
+        """
+        return self._settings[YEAR]
+
+    def init_co2(self: 'ArrheniusConfig') -> float:
+        """
+        Returns the multiplier of atmospheric CO2 concentration for initial
+        model state. The multiplier is relative to the concentration present
+        at the year chosen, or in 1895 under Arrhenius data mode.
+
+        :return:
+            Initial CO2 concentration multiplier
+        """
+        return self._settings[CO2_INIT]
+
+    def final_co2(self: 'ArrheniusConfig') -> float:
+        """
+        Returns the multiplier of atmospheric CO2 concentration for final
+        model state. The multiplier is relative to the concentration present
+        at the year chosen, or in 1895 under Arrhenius data mode.
+
+        :return:
+            Final CO2 concentration multiplier
+        """
+        return self._settings[CO2_FINAL]
+
+    def grid(self: 'ArrheniusConfig') -> GridDimensions:
+        """
+        Returns the 2-dimensional latitude-longitude grid that all surface/
+        atmospheric data is represented on. In the case of a multilayer
+        atmosphere, each individual layer is represented on this grid.
+
+        :return:
+            The flat latitude/longitude grid for Earth data
+        """
+        return self._settings[GRID]
+
+    def layers(self: 'ArrheniusConfig') -> int:
+        """
+        Returns the number of layers in a multilayer model. This option is
+        ignored in Arrhenius mode, or single-layer modern data runs.
+
+        :return:
+            The number of layers in a multilayer model
+        """
+        return self._settings[NUM_LAYERS]
+
+    def iterations(self: 'ArrheniusConfig') -> int:
+        """
+        Returns the number of calculation iterations for the humidity-
+        transparency feedback effect.
+
+        :return:
+            The number of humidity recalculations per grid cell
+        """
+        return self._settings[NUM_ITERS]
+
+    def aggregate_latitude(self: 'ArrheniusConfig') -> Optional[str]:
+        """
+        Returns the settings for latitude aggregation, specifying when/whether
+        to replace rows of grid cells with average values over those rows. In a
+        multilayer model, this mode applies to all layers individually.
+
+        :return:
+            The aggregate latitude option's setting
+        """
+        return self._settings[AGGREGATE_LAT]
+
+    def aggregate_level(self: 'ArrheniusConfig') -> Optional[str]:
+        """
+        Returns the settings for level aggregation in a multilayer model,
+        specifying when/whether to convert the multilayer data into a
+        single-layer version.
+
+        :return:
+            The aggregate level option's setting
+        """
+        return self._settings[AGGREGATE_LEVEL]
+
+    def model_mode(self: 'ArrheniusConfig') -> str:
+        """
+        Returns the absorption mode of the upcoming model run, which
+        identifies whether Arrhenius' data, modern data, or multilayered
+        data is used.
+
+        :return:
+            The model's absorption mode
+        """
+        return self._settings[ABSORBANCE_SRC]
+
+    def temp_provider(self: 'ArrheniusConfig') -> Callable:
+        """
+        Returns the temperature provider function for the upcoming model run.
+        That function returns temperature data to run the model on, regridded
+        to its grid parameter.
+
+        :return:
+            A temperature provider function
+        """
+        return self._settings[TEMP_SRC]
+
+    def humidity_provider(self: 'ArrheniusConfig') -> Callable:
+        """
+        Returns the elative humidity provider function for the upcoming model
+        run. That function returns humidity data to run the model on, regridded
+        to its grid parameter.
+
+        :return:
+            A relative humidity provider function
+        """
+        return self._settings[HUMIDITY_SRC]
+
+    def albedo_provider(self: 'ArrheniusConfig') -> Callable:
+        """
+        Returns the inverse albedo provider function for the upcoming model
+        run. That function returns data regridded to its grid parameter, each
+        value representing 1 minus the albedo in the corresponding grid cell.
+
+        :return:
+            An inverse albedo provider function
+        """
+        return self._settings[ALBEDO_SRC]
+
+    def pressure_provider(self: 'ArrheniusConfig') -> Callable:
+        """
+        Returns the pressure provider function for the upcoming modern model
+        run. The function returns a vector of pressure values that mark the
+        borders of atmospheric layers. These can be used to infer the heights
+        of each layer.
+
+        :return:
+            An atmospheric pressure provider function
+        """
+        try:
+            return self._settings[PRESSURE_SRC]
+        except KeyError:
+            raise AttributeError("No value specified for pressure_provider")
+
+    def table_auxiliaries(self: 'ArrheniusConfig') -> (Callable, Callable):
+        """
+        Returns additional functions used in original Arrhenius data mode.
+        First is a function used to assign weights to adjacent CO2 values.
+        Second is the corresponding function for adjacent H2O values.
+
+        :return:
+            Weight functions for CO2 and H2O in Arrhenius mode, respectively
+        """
+        try:
+            co2_function = self._settings[CO2_WEIGHT]
+        except KeyError:
+            raise AttributeError("No value specified for CO2 weight function")
+
+        try:
+            h2o_function = self._settings[H2O_WEIGHT]
+        except KeyError:
+            raise AttributeError("No value specified for H2O weight function")
+
+        return co2_function, h2o_function
+
+    def colorbar(self: 'ArrheniusConfig') -> Tuple[float, float]:
+        """
+        Returns the lower and upper bounds for the color scale in any images
+        rendered during the model run.
+
+        :return:
+            The bounds on colour values for the model's images
+        """
+        return self._settings[COLORBAR_SCALE]
+
+
 def from_json_string(json_data: str) -> Config:
     """
     Produce a configuration object from a string containing JSON-formatted
@@ -243,9 +846,13 @@ def from_json_string(json_data: str) -> Config:
         A configuration object based on the JSON data
     """
     options = json.loads(json_data)
-    validate(options, json_schema)
+    try:
+        validate(options, json_schema)
+    except ValidationError as err:
+        raise InvalidConfigError("Configuration failed to validate: "
+                                 + err.message)
 
-    return from_dict(options)
+    return ArrheniusConfig(options)
 
 
 def from_xml_string(xml_data: str) -> Config:
@@ -264,59 +871,7 @@ def from_xml_string(xml_data: str) -> Config:
     xml_tree = ETree.fromstring(xml_data)
     options = {child.tag: child.data.strip() for child in xml_tree}
 
-    return from_dict(options)
-
-
-def from_dict(options: Dict[str, str]) -> Config:
-    """
-    Returns a proper config object based on the config options dictionary,
-    by replacing string identifiers with the objects they identify. The
-    original dictionary is not modified in the process.
-
-    For example, data provider functions are identified by string names in
-    an original configuration input. These names are converted into the
-    appropriate function objects in the final configuration object.
-
-    :param options:
-        A dictionary of configuration objects
-    :return:
-        A configuration object based on the dictionary, with some strings
-        being replaced with non-serializable objects they identify.
-    """
-    options[COLORBAR_SCALE] = tuple(options[COLORBAR_SCALE])
-    config = {k: v for k, v in options.items()}
-
-    # Generate a hash value from the options, which are all strings or
-    # dicts. Each set of options should generate a unique hash.
-    # Make all hash keys positive.
-    config_hash_val = abs(freeze_dict(options).__hash__())
-    # Convert to hexadecimal for compaction and remove the 0x from the front.
-    config[RUN_ID] = hex(config_hash_val)[2:]
-
-    # Transform grid specifications (strings) into a grid object.
-    grid_dict = config[GRID][GRID_DIMS]
-    grid_dims = (grid_dict[GRID_FORMAT_LAT], grid_dict[GRID_FORMAT_LON])
-    config[GRID] = GridDimensions(grid_dims, config[GRID][GRID_TYPE])
-
-    # For data providers, replace strings that identify functions with the
-    # functions themselves.
-    config[TEMP_SRC] = PROVIDERS['temperature'][config[TEMP_SRC]]
-    config[HUMIDITY_SRC] = PROVIDERS['humidity'][config[HUMIDITY_SRC]]
-    config[ALBEDO_SRC] = PROVIDERS['albedo'][config[ALBEDO_SRC]]
-
-    if PRESSURE_SRC in config:
-        config[PRESSURE_SRC] = PROVIDERS['pressure'][config[PRESSURE_SRC]]
-    else:
-        config[PRESSURE_SRC] = lambda: None
-
-    # Replace string identifying transparency-weighting functions with the
-    # functions themselves.
-    for trans_weight_option in ['CO2_weight', 'H2O_weight']:
-        if trans_weight_option in config:
-            config[trans_weight_option] = \
-                _transparency_weight_converter[config[trans_weight_option]]
-
-    return config
+    return ArrheniusConfig(options)
 
 
 def default_config() -> Config:
@@ -335,3 +890,34 @@ def default_config() -> Config:
     default_json_file.close()
 
     return from_json_string(default_json_str)
+
+
+# Dictionary of thread-specific variables, accessible at global scope.
+# Set up initial state.
+globals = local()
+
+
+def global_config() -> 'ArrheniusConfig':
+    """
+    Returns the thread's active configuration set.
+
+    :return:
+        The thread-global configuration
+    """
+    try:
+        return globals.conf
+    except AttributeError:
+        default = default_config()
+        globals.conf = default
+        return default
+
+
+def set_configuration(config: 'ArrheniusConfig') -> None:
+    """
+    Replace the active thread-specific configuration set with conf.
+    Other threads will not see the change.
+
+    :param config:
+        A new configuration set to be used by this thread
+    """
+    globals.conf = config
