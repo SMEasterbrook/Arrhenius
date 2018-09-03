@@ -1,5 +1,5 @@
 from os import path
-from typing import List, Tuple
+from typing import Optional, List, Tuple
 
 from data.resources import OUTPUT_REL_PATH
 from data.reader import NetCDFReader
@@ -445,7 +445,7 @@ class ModelOutput:
 
 def save_from_dataset(dataset_parent: str,
                       var_name: str,
-                      time_seg: int,
+                      time_seg: Optional[int],
                       config: 'ArrheniusConfig') -> bool:
     """
     Produce a set of image outputs based on a dataset, written by a
@@ -456,9 +456,10 @@ def save_from_dataset(dataset_parent: str,
     The images produced are under the variable var_name in the dataset,
     and only in the time unit given by time_seg. If time_seg is 0, then
     one image will be produced containing averages over the datapoints
-    in all time units.
+    in all time units. If time_seg is None, then an image will be produced
+    for every valid time segment.
 
-    Returns True iff a new image was produced by this call, i.e. iff it
+    Returns True iff a new image was produced by this call, i.e. if it
     did not exist prior to the call.
 
     :param dataset_parent:
@@ -477,34 +478,43 @@ def save_from_dataset(dataset_parent: str,
     parent_path = path.join(dataset_parent, var_name)
     Path(parent_path).mkdir(exist_ok=True)
 
-    # Detect if the desired image file already exists
-    file_ext = ".png"
-    base_name = var_name + "_" + str(time_seg)
-    file_name = image_file_name(base_name, config) + file_ext
-    img_path = path.join(parent_path, file_name)
-
-    if not Path(img_path).is_file():
-        # Locate the dataset and read the desired variable from it.
+    if time_seg is None:
+        # Assume at least one image needs to be produced, and immediately
+        # read in data in preparation for that.
         dataset_path = path.join(dataset_parent, run_id + ".nc")
         reader = NetCDFReader(dataset_path)
         data = reader.collect_untimed_data(var_name)
-
-        # Extract only the requested parts of the data.
-        if time_seg == 0:
-            selected_time_data = data.mean(axis=0)
-        else:
-            selected_time_data = data[time_seg - 1]
-
-        # Write the new image file.
-        img_writer = ModelImageRenderer(selected_time_data)
-        img_writer.save_image(img_path, config.colorbar())
         reader.close()
 
-        created = True
+        # Write all images for variable var_name to the proper destination.
+        out_path = path.join(dataset_parent, var_name)
+        return write_image_type(data, out_path, var_name, config)
     else:
-        created = False
+        # Detect if the desired image file already exists.
+        base_name = var_name + "_" + str(time_seg)
+        file_name = image_file_name(base_name, config) + ".png"
+        img_path = path.join(parent_path, file_name)
 
-    return created
+        created = not Path(img_path).is_file()
+
+        if created:
+            # Locate the dataset and read the desired variable from it.
+            dataset_path = path.join(dataset_parent, run_id + ".nc")
+            reader = NetCDFReader(dataset_path)
+            data = reader.collect_untimed_data(var_name)
+
+            # Extract only the requested parts of the data.
+            if time_seg == 0:
+                selected_time_data = data.mean(axis=0)
+            else:
+                selected_time_data = data[time_seg - 1]
+
+            # Write the new image file.
+            img_writer = ModelImageRenderer(selected_time_data)
+            img_writer.save_image(img_path, config.colorbar())
+            reader.close()
+
+        return created
 
 
 def write_model_output(data: List['LatLongGrid']) -> None:
