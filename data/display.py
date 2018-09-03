@@ -7,6 +7,7 @@ from data.writer import NetCDFWriter
 from data.grid import LatLongGrid, GridDimensions,\
     extract_multidimensional_grid_variable
 
+from core.configuration import global_config
 from core.output_config import global_output_center, ReportDatatype, Debug,\
     DATASET_VARS, IMAGES
 
@@ -188,19 +189,17 @@ class ModelImageRenderer:
 def write_image_type(data: np.ndarray,
                      output_path: str,
                      data_type: str,
-                     run_id: str,
-                     scale: Tuple[float, float] = (-8, 8)) -> None:
+                     config: 'ArrheniusConfig') -> None:
     """
     Write out a category of output, given by the parameter data, to a
     directory with the name given by output_path. One image file will
     be produced for every index in the highest-level dimension in the
     data.
 
-    The third ard fourth parameters specify the name of the variable
-    being represented by this set of images, and the name of the model
-    run respectively. EAch image's name will begin with run_id followed
-    by an underscore followed by data_type. These will be followed by a
-    number indicating the order in which the images were written.
+    The third parameter specifies the name of the variable being
+    represented by this set of images. The fourth parameter is a
+    configuration set belonging to the model run the images will be
+    based on. Configuration will determine the names of the output files.
 
     :param data:
         A single-variable grid derived from Arrhenius model output
@@ -208,10 +207,8 @@ def write_image_type(data: np.ndarray,
         The directory where image files will be stored
     :param data_type:
         The name of the variable on which the data is based
-    :param run_id:
-        A unique name for the current model run
-    :param scale:
-        The lower and upper limits to the colorbar on each image
+    :param config:
+        Configuration options for the previously-run model run
     """
     Path(output_path).mkdir(exist_ok=True)
     output_center = global_output_center()
@@ -219,7 +216,7 @@ def write_image_type(data: np.ndarray,
                                 "Preparing to write {} images"
                                 .format(data_type))
 
-    img_base_name = "_".join([run_id, data_type])
+    img_base_name = "_".join([config.run_id(), data_type])
     file_ext = '.png'
 
     annual_avg = np.array([np.mean(data, axis=0)])
@@ -230,11 +227,12 @@ def write_image_type(data: np.ndarray,
         img_name = "_".join([img_base_name, str(i) + file_ext])
         img_path = path.join(output_path, img_name)
 
-        # Produce and save the image.
-        output_center.submit_output(Debug.PRINT_NOTICES,
-                                    "\tSaving image file {}...".format(i))
-        g = ModelImageRenderer(data[i])
-        g.save_image(img_path, scale)
+        if not Path(img_path).is_file():
+            # Produce and save the image.
+            output_center.submit_output(Debug.PRINT_NOTICES,
+                                        "\tSaving image file {}...".format(i))
+            g = ModelImageRenderer(data[i])
+            g.save_image(img_path, config.colorbar())
 
 
 class ModelOutput:
@@ -350,8 +348,7 @@ class ModelOutput:
     def write_images(self: 'ModelOutput',
                      data: List['LatLongGrid'],
                      output_path: str,
-                     run_id: str = "",
-                     scale: Tuple[float, float] = (-8, 8)) -> None:
+                     config: 'ArrheniusConfig') -> None:
         """
         Produce a series of maps displaying some of the results of an
         Arrhenius model run according to what variable the output controller
@@ -359,18 +356,15 @@ class ModelOutput:
 
         One image will be produced per time segment per variable for which
         output is allowed by the output controller, based on which
-        ReportDatatype output types are enabled. The optional argument
-        img_base_name specifies a prefix that will be added to each of the
-        image files to identify which model run they belong to.
+        ReportDatatype output types are enabled. Names of these image files
+        are based on variable and time unit, as well as config.
 
         :param data:
             The output from an Arrhenius model run
         :param output_path:
             The directory where image files will be stored
-        :param run_id:
-            A prefix that will start off the names of all the image files
-        :param scale:
-            The lower and upper limits to the colorbar on each image
+        :param config:
+            Configuration options for the model run
         """
         output_controller = global_output_center()
 
@@ -384,26 +378,24 @@ class ModelOutput:
             output_controller.submit_output(output_type, variable,
                                             img_type_path,
                                             variable_name,
-                                            run_id,
-                                            scale)
+                                            config)
 
     def write_output(self: 'ModelOutput',
-                     run_title: str,
-                     scale: Tuple[float, float] = (-8, 8)) -> None:
+                     config: 'ArrheniusConfig') -> None:
         """
-        Produce NetCDF data files and image files from the provided data, and
-        a directory with the name dir_name to hold them.
+        Produce NetCDF data files and image files from the provided data,
+        located in a new directory for this output set. The name of the
+        directory is based on config.
 
         One image file is created per time segment in the data. In the
         case of Arrhenius' model, this is one per season. Only one NetCDF data
         file is produced, in which all time segments are present.
 
-        :param run_title:
-            A unique name for the output directory, associated with the model
-            run's unique configuration
-        :param scale:
-            The lower and upper limits to the colorbar on each image
+        :param config:
+            Configuration options for the model run
         """
+        run_title = config.run_id()
+
         # Create a directory for this model output if none exists already.
         out_dir_path = path.join(OUTPUT_FULL_PATH, run_title)
         out_dir = Path(out_dir_path)
@@ -417,45 +409,39 @@ class ModelOutput:
         output_controller.submit_collection_output((IMAGES,),
                                                    self._data,
                                                    out_dir_path,
-                                                   run_title,
-                                                   scale)
+                                                   config)
 
 
 def save_from_dataset(dataset_parent: str,
-                      run_id: str,
                       var_name: str,
                       time_seg: int,
-                      scale: Tuple[float, float] = (-8, 8)) -> bool:
+                      config: 'ArrheniusConfig') -> bool:
     """
     Produce a set of image outputs based on a dataset, written by a
-    previous run of the Arrhenius model. This dataset is stored in the
-    directory given by the path dataset_parent, and is named run_id.
-    run_id need not include the .nc file extension.
+    previous run of the Arrhenius model that used config as its
+    configuration set. This dataset is stored in the directory given by
+    the path dataset_parent.
 
     The images produced are under the variable var_name in the dataset,
     and only in the time unit given by time_seg. If time_seg is 0, then
     one image will be produced containing averages over the datapoints
     in all time units.
 
-    The colourbar boundaries on any of these images are given by the
-    scale parameter.
-
     Returns True iff a new image was produced by this call, i.e. iff it
     did not exist prior to the call.
 
     :param dataset_parent:
         A path to the directory containing the dataset
-    :param run_id:
-        The name of the dataset, as well as of the output image files
     :param var_name:
         The variable from the dataset that will be used to generate the images
     :param time_seg:
         An integer specifying which time unit to use data from
-    :param scale:
-        The lower and upper limits to the colorbar on each image
+    :param config:
+        Configuration options for the previously-run model run
     :return:
         True iff a new image file was created
     """
+    run_id = config.run_id()
     # Locate or create a directory to contain image files.
     parent_path = path.join(dataset_parent, var_name)
     Path(parent_path).mkdir(exist_ok=True)
@@ -478,7 +464,7 @@ def save_from_dataset(dataset_parent: str,
 
         # Write the new image file.
         img_writer = ModelImageRenderer(selected_time_data)
-        img_writer.save_image(img_path, scale)
+        img_writer.save_image(img_path, config.colorbar())
         reader.close()
 
         created = True
@@ -488,21 +474,18 @@ def save_from_dataset(dataset_parent: str,
     return created
 
 
-def write_model_output(data: List['LatLongGrid'],
-                       run_title: str,
-                       scale: Tuple[float, float] = (-8, 8)) -> None:
+def write_model_output(data: List['LatLongGrid']) -> None:
     """
     Write the results of a model run (data) to disk, in the form of a
-    NetCDF dataset and a series of image files arranged into a directory
-    with the name given by output_title.
+    NetCDF dataset and a series of image files.
+
+    Location and output specifications are given by thread-specific
+    global configurations, which can be accessed using the global_config
+    and set_configuration functions in the configuration module, and the
+    corresponding functions in output_config.
 
     :param data:
         The output from an Arrhenius model run
-    :param run_title:
-            A unique name for the output directory, associated with the model
-            run's unique configuration
-    :param scale:
-        The lower and upper limits to the colorbar on each image
     """
     writer = ModelOutput(data)
     controller = global_output_center()
@@ -520,4 +503,4 @@ def write_model_output(data: List['LatLongGrid'],
                                              (IMAGES,),
                                              write_image_type)
 
-    writer.write_output(run_title, scale)
+    writer.write_output(global_config())

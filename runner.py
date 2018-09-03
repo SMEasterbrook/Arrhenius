@@ -59,7 +59,6 @@ class ModelRun:
         except AttributeError:
             pass
 
-
     def run_model(self: 'ModelRun',
                   expected: Optional[np.ndarray] = None) -> GriddedData:
         """
@@ -75,6 +74,7 @@ class ModelRun:
         :return:
             The state of the Earth's surface based on the model's calculations
         """
+        cnf.set_configuration(self.config)
         out_cnf.set_output_center(self.output_controller)
 
         year_of_interest = self.config.year()
@@ -123,9 +123,7 @@ class ModelRun:
         # Finally, write model output to disk.
         out_cnf.global_output_center().submit_collection_output(
             out_cnf.PRIMARY_OUTPUT_PATH,
-            ground_layer,
-            self.config.run_id(),
-            self.config.colorbar()
+            ground_layer
         )
 
         return self.grids
@@ -601,9 +599,9 @@ if __name__ == '__main__':
 
             # Parse config options from file.
             json_filepath = options_map["-c"]
-            json_file = open(json_filepath, "r")
-            conf = cnf.from_json_string(json_file.read())
-            json_file.close()
+
+            with open(json_filepath, "r") as json_file:
+                conf = cnf.from_json_string(json_file.read())
         except (KeyError, GetoptError):
             # Only catch errors resulting from improper argument passing:
             # Invalid config errors should propagate.
