@@ -242,11 +242,12 @@ def multi_model_data(varname: str):
 
     # This series of zip-file-related variables makes the purpose of each
     # expression more recognizable, but they are not really necessary.
-    scale_suffix = "[{}x{}]".format(*config.colorbar()).replace(".", "")
+    scale_suffix = "[{}x{}]".format(*config.colorbar())
+    scale_dir_name = "_".join([run_id, scale_suffix])
     archive_name = "_".join([run_id, varname, scale_suffix])
 
     ds_parent, model_created = ensure_model_results(config)
-    archive_path = path.join(ds_parent, archive_name)
+    archive_path = path.join(ds_parent, scale_dir_name, archive_name)
 
     img_created = False
     if not Path(archive_path + ".zip").is_file():
