@@ -333,10 +333,12 @@ class ArrheniusConfig:
         except InvalidConfigError:
             # Remove any keys from the dictionary that do not affect ID.
             for ignored_key in [COLORBAR_SCALE]:
-                del basis[ignored_key]
+                if ignored_key in basis:
+                    del basis[ignored_key]
             config_hash_val = abs(freeze_dict(basis).__hash__())
 
-            # Convert to hexadecimal for compaction and remove the 0x from the front.
+            # Convert to hexadecimal for compaction and remove the 0x
+            # from the front.
             self._settings[RUN_ID] = hex(config_hash_val)[2:]
 
     def __setitem__(self: 'ArrheniusConfig',
