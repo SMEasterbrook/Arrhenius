@@ -7,7 +7,7 @@ from data.writer import NetCDFWriter
 from data.grid import LatLongGrid, GridDimensions,\
     extract_multidimensional_grid_variable
 
-from core.configuration import global_config
+from core.configuration import global_config, ArrheniusConfig
 from core.output_config import global_output_center, ReportDatatype, Debug,\
     DATASET_VARS, IMAGES
 
@@ -87,9 +87,57 @@ def image_file_name(basename: str,
     :return:
         A name for the image file
     """
+    # File names are defined by the model's run ID and the colour scale.
+    # Periods are replaced with commas in colorbar bounds to avoid improper
+    # interpretation as part of a file extension.
     return "_".join([config.run_id(), basename,
                      "[{}x{}]".format(*config.colorbar())])\
-              .replace(".", "")
+              .replace(".", ",")
+
+
+def get_image_directory(parent: str,
+                        run_id: str,
+                        var_name: str,
+                        scale: Tuple[float, float],
+                        create: bool = True) -> str:
+    """
+    Returns a file path to the directory that stores images from a model
+    run titled run_id, representing variable var_name, with colorbar
+    boundaries as given in scale. This directory is placed inside parent,
+    which can be a directory for whole model output.
+
+    By default, the directory structure will be created if it does not exist.
+    If the optional parameter create is given the value False, the directory
+    structure will not be created. This may save computation steps, but
+    exercise caution when using this option.
+
+    :param parent:
+        The directory in which the output directory is to be placed
+    :param run_id:
+        The name of the model run from which the images are being produced
+    :param var_name:
+        The name of the variable being rendered in the images
+    :param scale:
+        Lower and upper bounds on the values on the colorbar of all the images
+    :param create:
+        Whether or not to create the directory structure if it does not exist
+    :return:
+        A path to the directory where images are/should be placed
+    """
+    # Topmost directory contains all images produced from the model run
+    # with colour bounds equivalent to scale.
+    scale_dir_name = "_".join([run_id, "[{}x{}]".format(*scale)])
+    scale_dir_path = path.join(parent, scale_dir_name)
+
+    # Lower-level directory contains images that represent variable var_name.
+    out_dir_path = path.join(scale_dir_path, var_name)
+
+    if create:
+        # Create the new directory structure if specified.
+        Path(scale_dir_path).mkdir(exist_ok=True)
+        Path(out_dir_path).mkdir(exist_ok=True)
+
+    return out_dir_path
 
 
 class ModelImageRenderer:
@@ -208,7 +256,7 @@ class ModelImageRenderer:
 
 
 def write_image_type(data: np.ndarray,
-                     output_path: str,
+                     parent_path: str,
                      data_type: str,
                      config: 'ArrheniusConfig') -> bool:
     """
@@ -234,12 +282,14 @@ def write_image_type(data: np.ndarray,
     :return:
         True iff a new image file was produced
     """
-    Path(output_path).mkdir(exist_ok=True)
     output_center = global_output_center()
     output_center.submit_output(Debug.PRINT_NOTICES,
                                 "Preparing to write {} images"
                                 .format(data_type))
 
+    output_path = \
+        get_image_directory(parent_path, config.run_id(), data_type,
+                            config.colorbar(), create=True)
     file_ext = '.png'
 
     annual_avg = np.array([np.mean(data, axis=0)])
@@ -401,14 +451,12 @@ class ModelOutput:
 
         # Attempt to output images for each variable output type.
         for output_type in ReportDatatype:
-            variable_name = output_type.value
-            variable = extract_multidimensional_grid_variable(data,
-                                                              variable_name)
-            img_type_path = path.join(output_path, variable_name)
+            var_name = output_type.value
+            variable = extract_multidimensional_grid_variable(data, var_name)
 
             output_controller.submit_output(output_type, variable,
-                                            img_type_path,
-                                            variable_name,
+                                            output_path,
+                                            var_name,
                                             config)
 
     def write_output(self: 'ModelOutput',
@@ -475,8 +523,6 @@ def save_from_dataset(dataset_parent: str,
     """
     run_id = config.run_id()
     # Locate or create a directory to contain image files.
-    parent_path = path.join(dataset_parent, var_name)
-    Path(parent_path).mkdir(exist_ok=True)
 
     if time_seg is None:
         # Assume at least one image needs to be produced, and immediately
@@ -487,9 +533,13 @@ def save_from_dataset(dataset_parent: str,
         reader.close()
 
         # Write all images for variable var_name to the proper destination.
-        out_path = path.join(dataset_parent, var_name)
-        return write_image_type(data, out_path, var_name, config)
+        return write_image_type(data, dataset_parent, var_name, config)
     else:
+        # Create an output directory for the new images and get its name.
+        parent_path = \
+            get_image_directory(dataset_parent, run_id, var_name,
+                                config.colorbar(), create=True)
+
         # Detect if the desired image file already exists.
         base_name = var_name + "_" + str(time_seg)
         file_name = image_file_name(base_name, config) + ".png"

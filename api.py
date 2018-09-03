@@ -12,7 +12,8 @@ from core.configuration import from_json_string, ArrheniusConfig
 from core.output_config import ReportDatatype, default_output_config
 from runner import ModelRun
 
-from data.display import OUTPUT_FULL_PATH, save_from_dataset, image_file_name
+from data.display import OUTPUT_FULL_PATH, save_from_dataset,\
+    image_file_name, get_image_directory
 from data.provider import PROVIDERS
 
 
@@ -121,9 +122,10 @@ def ensure_image_output(ds_parent: str,
         A 2-tuple containing a path to the directory containing the image,
         followed by whether the image was not already on disk.
     """
-    img_parent = path.join(ds_parent, var_name)
     created = save_from_dataset(ds_parent, var_name, time_seg,
                                 config)
+    img_parent = get_image_directory(ds_parent, config.run_id(), var_name,
+                                     config.colorbar(), create=False)
 
     return img_parent, created
 
@@ -242,16 +244,14 @@ def multi_model_data(varname: str):
     archive_name = "_".join([run_id, varname, scale_suffix])
 
     ds_parent, model_created = ensure_model_results(config)
-    # archive_src is the directory that will be zipped; archive_path is the
-    # location where the zipfile will be written afterward.
-    archive_src = path.join(OUTPUT_FULL_PATH, run_id, varname)
     archive_path = path.join(ds_parent, archive_name)
 
     img_created = False
     if not Path(archive_path + ".zip").is_file():
         # The zip file has not been made yet: create all image files
         # for all time units with the requested variable and zip them.
-        img_created = ensure_image_output(ds_parent, varname, None, config)[1]
+        archive_src, img_created = ensure_image_output(ds_parent, varname,
+                                                       None, config)
         shutil.make_archive(archive_path, 'zip', archive_src)
 
     # Send the zip file attached to the HTTP response.
