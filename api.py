@@ -8,7 +8,7 @@ from pathlib import Path
 from threading import Lock
 import shutil
 
-from core.configuration import from_json_string, ArrheniusConfig
+from core.configuration import from_json_string, ArrheniusConfig, InvalidConfigError
 from core.output_config import ReportDatatype, default_output_config
 from runner import ModelRun
 
@@ -259,3 +259,88 @@ def multi_model_data(varname: str):
     return send_from_directory(ds_parent, archive_name + ".zip"),\
         response_code
 
+
+def error_template(title: str,
+                   msg: str) -> str:
+    """
+    Returns HTML markup reporting an error. title is written in a header,
+    and msg is written in a body text block beneath.
+
+    :param title:
+        Text for the header of the HTML page
+    :param msg:
+        Text for the body of the HTML page
+    :return:
+        A string containing HTML markup
+    """
+    head = "<DOCTYPE html>" \
+           + "\n<head>" \
+           + "\n  <title>" + title + "</title>" \
+           + "\n</head>"
+    body = "<body>" \
+           + "\n  <h1>" + title + "</h1>" \
+           + "\n  <hr>" \
+           + "\n  <p>" + msg + "</p>" \
+           + "\n</body>"
+
+    markup = head + "\n" + body
+    return markup
+
+
+@app.errorhandler(InvalidConfigError)
+def handle_invalid_config(err: InvalidConfigError):
+    """
+    Handler for InvalidConfigError, producing an HTML page whenever an API
+    endpoint encounters an error of that type. This page reports details of
+    which part of the configuration was invalid.
+
+    :param err:
+        The InvalidConfigError that triggered the handler
+    :return:
+        An HTTP response to send to the client
+    """
+    return error_template("Invalid Configuration", str(err)), 400
+
+
+@app.errorhandler(IOError)
+def handle_enomem(err: IOError):
+    """
+    Handler for IOErrors in the server, producing an HTML page whenever an API
+    endpoint encounters an error of that type. This page reports whether the
+    error was caused by lack of disk space.
+
+    :param err:
+        The IOError that triggered the handler
+    :return:
+        An HTTP response to send to the client
+    """
+    if err.errno == 28:
+        msg = "The server has insufficient disk space to produce output" \
+              " from a model run, and has failed to either produce a dataset" \
+              " for model results or to write image files from said results." \
+              " Consider placing a request for fewer resources at a time to" \
+              " lighten the load on server while it tries to free up space."
+        return error_template("Insufficient Space", msg), 413
+    else:
+        msg = "The server has failed to perform disk IO, most likely due to a" \
+              " malformed path. Please report this error to project engineers."
+        return error_template("Failed Disk IO", msg), 500
+
+
+@app.errorhandler(500)
+def handle_failure(err):
+    """
+    Handler for any server error that would ordinarily cause a response to be
+    sent with HTTP code 500. Produces an HTML page whenever an API endpoint
+    encounters an error of that type. This page currently does not provide any
+    useful information to the user, but it can be styled in the future.
+
+    :param err:
+        The error that triggered the handler
+    :return:
+        An HTTP response to send to the client
+    """
+    msg = "We are sorry, but our server is still young and has experienced an" \
+          " unexpected error. Please report this error to project engineers to" \
+          " get it patched sooner."
+    return error_template("Internal Error", msg), 500
