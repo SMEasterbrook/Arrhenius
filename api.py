@@ -1,10 +1,10 @@
-from flask import request, Response, jsonify, send_from_directory
+from flask import request, jsonify, send_from_directory
+from typing import Optional
 from website import app
 
 from os import path
 from pathlib import Path
 
-from base64 import b64encode
 from threading import Lock
 import shutil
 
@@ -94,7 +94,7 @@ def ensure_model_results(config: 'ArrheniusConfig') -> (str, bool):
 
 def ensure_image_output(ds_parent: str,
                         var_name: str,
-                        time_seg: int,
+                        time_seg: Optional[int],
                         config: 'ArrheniusConfig') -> (str, bool):
     """
     Guarantee that an image file has been produced representing the
@@ -236,21 +236,26 @@ def multi_model_data(varname: str):
     config = from_json_string(request.data.decode("utf-8"))
     run_id = str(config.run_id())
 
-    # This series of zip-file-related names makes the purpose of each
-    # more recognizable, but is not really necessary.
-    archive_name = "_".join([run_id, varname])
+    # This series of zip-file-related variables makes the purpose of each
+    # expression more recognizable, but they are not really necessary.
+    scale_suffix = "[{}x{}]".format(*config.colorbar()).replace(".", "")
+    archive_name = "_".join([run_id, varname, scale_suffix])
+
+    ds_parent, model_created = ensure_model_results(config)
+    # archive_src is the directory that will be zipped; archive_path is the
+    # location where the zipfile will be written afterward.
     archive_src = path.join(OUTPUT_FULL_PATH, run_id, varname)
+    archive_path = path.join(ds_parent, archive_name)
 
-    archive_parent, model_created = ensure_model_results(config)
-    archive_path = path.join(archive_parent, archive_name)
-
+    img_created = False
     if not Path(archive_path + ".zip").is_file():
-        # The zip file has not been made yet: zip the directory for
-        # image files in the requested variable.
+        # The zip file has not been made yet: create all image files
+        # for all time units with the requested variable and zip them.
+        img_created = ensure_image_output(ds_parent, varname, None, config)[1]
         shutil.make_archive(archive_path, 'zip', archive_src)
 
     # Send the zip file attached to the HTTP response.
-    response_code = 201 if model_created else 200
-    return send_from_directory(archive_parent, archive_name),\
+    response_code = 201 if model_created or img_created else 200
+    return send_from_directory(ds_parent, archive_name + ".zip"),\
         response_code
 
