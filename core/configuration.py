@@ -1,4 +1,5 @@
 from typing import Union, Optional, Tuple, Dict, Callable
+from threading import local
 from os import path
 
 from frozendict import frozendict
@@ -887,3 +888,34 @@ def default_config() -> Config:
     default_json_file.close()
 
     return from_json_string(default_json_str)
+
+
+# Dictionary of thread-specific variables, accessible at global scope.
+# Set up initial state.
+globals = local()
+
+
+def global_config() -> 'ArrheniusConfig':
+    """
+    Returns the thread's active configuration set.
+
+    :return:
+        The thread-global configuration
+    """
+    try:
+        return globals.conf
+    except AttributeError:
+        default = default_config()
+        globals.conf = default
+        return default
+
+
+def set_configuration(config: 'ArrheniusConfig') -> None:
+    """
+    Replace the active thread-specific configuration set with conf.
+    Other threads will not see the change.
+
+    :param config:
+        A new configuration set to be used by this thread
+    """
+    globals.conf = config

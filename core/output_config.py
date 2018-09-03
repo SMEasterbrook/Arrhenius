@@ -1,6 +1,7 @@
 from enum import Enum, auto
-from typing import List, Tuple, Dict, Callable, Optional
-from threading import local
+from typing import Tuple, Dict, Callable, Optional
+
+from core.configuration import globals
 
 # Type aliases
 OutputTypeHandler = Callable[..., None]
@@ -466,11 +467,6 @@ def development_output_config() -> 'OutputController':
                                   IMAGES_PATH)
 
     return controller
-
-
-# Dictionary of thread-specific variables, accessible at global scope.
-# Set up initial state.
-globals = local()
 
 
 def global_output_center() -> 'OutputController':
