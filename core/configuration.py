@@ -1,10 +1,12 @@
 from typing import Union, Optional, Tuple, Dict, Callable
 from os import path
+
 from frozendict import frozendict
 from datetime import datetime
 
 import json
 from jsonschema import validate
+from jsonschema.exceptions import ValidationError
 import xml.etree.ElementTree as ETree
 
 from data.resources import MAIN_PATH
@@ -297,7 +299,7 @@ class ArrheniusConfig:
             for key in vars:
                 if key not in basis:
                     raise InvalidConfigError("\"" + key + "\" is a required"
-                                             "configuration field")
+                                             " configuration field.")
             params = (basis[var] for var in vars)
             loader(*params)
 
@@ -309,7 +311,7 @@ class ArrheniusConfig:
                      "aggregate_lat", "aggregate_level")
         attempt_load(self.set_providers, "temp_src", "humidity_src",
                                           "albedo_src", "absorbance_src")
-        attempt_load(self.set_colorbar, "scale")
+        self.set_colorbar(basis.get("scale", (-8, 8)))
 
         try:
             attempt_load(self.set_year, "year")
@@ -409,11 +411,12 @@ class ArrheniusConfig:
         for param in ["from", "to"]:
             if param not in co2:
                 raise InvalidConfigError("\"" + param + "\" is a required"
-                                         "field for CO2 configuration")
+                                         " field for CO2 configuration")
 
         if co2["from"] != 1:
             raise InvalidConfigError("Only initial CO2 values of 1.0 are"
-                                     "currently supported.")
+                                     " currently supported (is {})."
+                                     .format(co2["from"]))
 
         self._settings[CO2_INIT] = co2["from"]
         self._settings[CO2_FINAL] = co2["to"]
@@ -433,18 +436,17 @@ class ArrheniusConfig:
         :param grid:
             A dictionary giving grid dimension specifications
         """
-        for param in ["dims", "repr"]:
-            if param not in grid:
-                raise InvalidConfigError("\"" + param + "\" is a required"
-                                         "field for grid specification")
+        if "dims" not in grid:
+            raise InvalidConfigError("\"dims\" is a required"
+                                     " field for grid specification")
 
         dims = grid["dims"]
         for param in ["lat", "lon"]:
             if param not in dims:
                 raise InvalidConfigError("\"" + param + "\" is a required"
-                                         "field for grid dimensions")
+                                         " field for grid dimensions")
         dims_tuple = (dims["lat"], dims["lon"])
-        self._settings[GRID] = GridDimensions(dims_tuple, grid["repr"])
+        self._settings[GRID] = GridDimensions(dims_tuple, grid.get("repr", "width"))
 
     def set_layers(self: 'ArrheniusConfig',
                    layers: int) -> None:
@@ -456,7 +458,8 @@ class ArrheniusConfig:
             The number of layers in a multilayer model
         """
         if layers < 1:
-            raise InvalidConfigError("Number of layers must be positive")
+            raise InvalidConfigError("Number of layers must be positive"
+                                     " (is {})".format(layers))
 
         self._settings[NUM_LAYERS] = layers
 
@@ -471,7 +474,7 @@ class ArrheniusConfig:
         """
         if iters < 0:
             raise InvalidConfigError("Number of feedback iterations must be"
-                                     "non-negative")
+                                     " non-negative (is {})".format(iters))
 
         self._settings[NUM_ITERS] = iters
 
@@ -490,19 +493,20 @@ class ArrheniusConfig:
             A key representing the setting of the aggregate level option
         """
         options = [AGGREGATE_BEFORE, AGGREGATE_AFTER, AGGREGATE_NONE]
-        ops_example = ", ".join(options[:-1]) + ", and " + str(options[-1])
+        ops_example = "\n" + "\", \"".join(options[:-1])\
+                      + "\", and \""+ str(options[-1]) + "\""
 
         if agg_lat is not None:
             if agg_lat not in options:
                 raise InvalidConfigError("\"aggregate_lat\" must be one of "
-                                         + ops_example + " (is {})."
+                                         + ops_example + " (is \"{}\")."
                                          .format(agg_lat))
             self._settings[AGGREGATE_LAT] = agg_lat
 
         if agg_level is not None:
             if agg_level not in options:
                 raise InvalidConfigError("\"aggregate_level\" must be one of "
-                                         + ops_example + " (is {})."
+                                         + ops_example + " (is \"{}\")."
                                          .format(agg_level))
             self._settings[AGGREGATE_LEVEL] = agg_level
 
@@ -538,47 +542,52 @@ class ArrheniusConfig:
 
         if temperature is not None:
             if temperature not in temp_options:
-                example = ", ".join(temp_options.keys()[:-1])\
-                          + ", and " + temp_options.keys()[-1]
+                example = "\"" + "\", \"".join(temp_options.keys()[:-1]) \
+                          + "\", and \"" + temp_options.keys()[-1] + "\""
                 raise InvalidConfigError("Temperature provider must be on of "
-                                         + example + ".")
+                                         + example + " (is \"{}\")."
+                                         .format(temperature))
             self._settings[TEMP_SRC] = temp_options[temperature]
 
         if humidity is not None:
             if humidity not in humidity_options:
-                example = ", ".join(humidity_options.keys()[:-1])\
-                          + ", and " + humidity_options.keys()[-1]
+                example = "\"" + "\", \"".join(humidity_options.keys()[:-1]) \
+                          + "\", and \"" + humidity_options.keys()[-1] + "\""
                 raise InvalidConfigError("Humidity provider must be on of "
-                                         + example + ".")
+                                         + example + " (is \"{}\")."
+                                         .format(humidity))
             self._settings[HUMIDITY_SRC] = humidity_options[humidity]
 
         if albedo is not None:
             if albedo not in albedo_options:
-                example = ", ".join(albedo_options.keys()[:-1])\
-                          + ", and " + albedo_options.keys()[-1]
+                example = "\"" + "\", \"".join(albedo_options.keys()[:-1]) \
+                          + "\", and \"" + albedo_options.keys()[-1] + "\""
                 raise InvalidConfigError("Albedo provider must be on of "
-                                         + example + ".")
+                                         + example + " (is \"{}\")."
+                                         .format(albedo))
             self._settings[ALBEDO_SRC] = albedo_options[albedo]
 
         if absorbance is not None:
             if absorbance not in absorbance_options:
-                example = ", ".join(absorbance_options[:-1])\
-                          + ", and " + absorbance_options[-1]
+                example = "\"" + "\", \"".join(absorbance_options[:-1]) \
+                          + "\", and \"" + absorbance_options[-1] + "\""
                 raise InvalidConfigError("Absorbance mode must be on of "
-                                         + example + ".")
+                                         + example + " (is \"{}\")."
+                                         .format(absorbance))
             self._settings[ABSORBANCE_SRC] = absorbance
 
         if pressure is not None:
             if absorbance == ABS_SRC_TABLE:
-                raise InvalidConfigError("Pressure provider is invalid for"
-                                         "Arrhenius data mode ({})"
-                                         .format(ABS_SRC_TABLE))
+                raise InvalidConfigError("Pressure provider \"{}\" is invalid"
+                                         " for Arrhenius (\"{}\") data mode."
+                                         .format(pressure, ABS_SRC_TABLE))
 
             if pressure not in pressure_options:
-                example = ", ".join(pressure_options.keys()[:-1])\
-                          + ", and " + pressure_options.keys()[-1]
+                example = "\"" + "\", \"".join(pressure_options.keys()[:-1]) \
+                          + "\", and \"" + pressure_options.keys()[-1] + "\""
                 raise InvalidConfigError("Pressure provider must be on of "
-                                         + example + ".")
+                                         + example + " (is \"{}\")."
+                                         .format(pressure))
             self._settings[PRESSURE_SRC] = pressure_options[pressure]
 
     def set_table_auxiliaries(self: 'ArrheniusConfig',
@@ -594,23 +603,27 @@ class ArrheniusConfig:
         :param h2o_weight_func:
             The key for a transparency weighting function for H2O
         """
-        if co2_weight_func in _transparency_weight_converter:
+        options = list(_transparency_weight_converter.keys())
+
+        if co2_weight_func in options:
             self._settings[CO2_WEIGHT] =\
                 _transparency_weight_converter[co2_weight_func]
         else:
-            example = ", ".join(_transparency_weight_converter.keys()[:-1])\
-                      + ", and " + _transparency_weight_converter[-1]
-            raise InvalidConfigError("CO2 weight function must be one of"
-                                     + example + ".")
+            example = "\"" + "\", \"".join(options[:-1])\
+                      + "\", and \"" + options[-1] + "\""
+            raise InvalidConfigError("CO2 weight function must be one of "
+                                     + example + " (is \"{}\")."
+                                     .format(co2_weight_func))
 
-        if h2o_weight_func in _transparency_weight_converter:
+        if h2o_weight_func in options:
             self._settings[H2O_WEIGHT] =\
                 _transparency_weight_converter[h2o_weight_func]
         else:
-            example = ", ".join(_transparency_weight_converter.keys()[:-1])\
-                      + ", and " + _transparency_weight_converter[-1]
-            raise InvalidConfigError("H2O weight function must be one of"
-                                     + example + ".")
+            example = "\"" + "\", \"".join(options[:-1]) \
+                      + "\", and \"" + options[-1] + "\""
+            raise InvalidConfigError("H2O weight function must be one of "
+                                     + example + " (is \"{}\")."
+                                     .format(h2o_weight_func))
 
     def set_colorbar(self: 'ArrheniusConfig',
                      colorbar_scale: Tuple[float, float]) -> None:
@@ -624,13 +637,13 @@ class ArrheniusConfig:
         """
         if colorbar_scale[0] >= colorbar_scale[1]:
             raise InvalidConfigError("Lower bound of colorbar scale must"
-                                     "be less than upper bound ({} >= {})"
+                                     " be less than upper bound ({} >= {})"
                                      .format(colorbar_scale[0],
                                              colorbar_scale[1]))
 
         self._settings[COLORBAR_SCALE] = colorbar_scale
 
-    def run_id(self: 'ArrheniusConfig') -> float:
+    def run_id(self: 'ArrheniusConfig') -> str:
         """
         Returns the unique ID for this model configuration.
 
@@ -830,7 +843,11 @@ def from_json_string(json_data: str) -> Config:
         A configuration object based on the JSON data
     """
     options = json.loads(json_data)
-    validate(options, json_schema)
+    try:
+        validate(options, json_schema)
+    except ValidationError as err:
+        raise InvalidConfigError("Configuration failed to validate: "
+                                 + err.message)
 
     return ArrheniusConfig(options)
 
