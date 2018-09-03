@@ -175,7 +175,8 @@ def scientific_dataset():
 def single_model_data(varname: str, time_seg: str):
     """
     Returns a response to an HTTP request for one image file produced by
-    a run of the Arrhenius model, that are associated with variable varname.
+    a run of the Arrhenius model, that is associated with variable varname
+    and the time unit time_seg (or 0 for average over all time segments).
 
     If the request is a POST request, a configuration dictionary is expected
     in the request body in the form of a JSON string. Assuming the
@@ -186,22 +187,16 @@ def single_model_data(varname: str, time_seg: str):
     More specifically, the image file is the time_seg'th map produced for
     variable varname under the relevant model run.
 
-    The image file returned is a Base64-encoded PNG file. Browsers may
-    interpret the file as a string rather than as an image. This is
-    recognized as a design flaw and will be fixed in the future.
-
     :param varname:
         The name of the variable that is overlaid on the map
     :param time_seg:
         A specifier for which month, season, or general time gradation
         the map should represent
     :return:
-        An HTTP response with the requested image file attached, as a
-        Base64-encoded PNG file
+        An HTTP response with the requested image file attached as raw data
     """
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
-    run_id = str(config.run_id())
 
     parent_dir, model_created = ensure_model_results(config)
 
@@ -211,19 +206,13 @@ def single_model_data(varname: str, time_seg: str):
                                                      int(time_seg), config)
     img_fs_lock.release()
 
+    # Get the file's name and path in preparation for sending to the client.
     base_name = varname + "_" + str(time_seg)
     file_name = image_file_name(base_name, config) + ".png"
-    file_path = path.join(download_path, file_name)
 
-    # Read the binary image file and encode in Base64 encoding.
-    fp = open(file_path, "rb")
-    img_encoded = b64encode(fp.read())
-    fp.close()
-
-    # Send the Base64-encoded image attached to the HTTP response.
+    # Send the HTTP response with the file contents in its body.
     response_code = 201 if model_created or img_created else 200
-    content_type = "Content-Type: image/png; charset=base64"
-    return Response(img_encoded, response_code, mimetype=content_type)
+    return send_from_directory(download_path, file_name), response_code
 
 
 @app.route('/model/<varname>', methods=['POST'])
