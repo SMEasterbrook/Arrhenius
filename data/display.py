@@ -189,12 +189,13 @@ class ModelImageRenderer:
 def write_image_type(data: np.ndarray,
                      output_path: str,
                      data_type: str,
-                     config: 'ArrheniusConfig') -> None:
+                     config: 'ArrheniusConfig') -> bool:
     """
     Write out a category of output, given by the parameter data, to a
     directory with the name given by output_path. One image file will
     be produced for every index in the highest-level dimension in the
-    data.
+    data. Returns True iff a new image was produced that was not already
+    present on disk.
 
     The third parameter specifies the name of the variable being
     represented by this set of images. The fourth parameter is a
@@ -209,6 +210,8 @@ def write_image_type(data: np.ndarray,
         The name of the variable on which the data is based
     :param config:
         Configuration options for the previously-run model run
+    :return:
+        True iff a new image file was produced
     """
     Path(output_path).mkdir(exist_ok=True)
     output_center = global_output_center()
@@ -222,17 +225,24 @@ def write_image_type(data: np.ndarray,
     annual_avg = np.array([np.mean(data, axis=0)])
     data = np.concatenate([annual_avg, data], axis=0)
 
+    created = False
+
     # Write an image file for each time segment.
     for i in range(len(data)):
         img_name = "_".join([img_base_name, str(i) + file_ext])
         img_path = path.join(output_path, img_name)
 
-        if not Path(img_path).is_file():
+        new_created = not Path(img_path).is_file()
+
+        if new_created:
             # Produce and save the image.
             output_center.submit_output(Debug.PRINT_NOTICES,
                                         "\tSaving image file {}...".format(i))
             g = ModelImageRenderer(data[i])
             g.save_image(img_path, config.colorbar())
+            created = True
+
+    return created
 
 
 class ModelOutput:
