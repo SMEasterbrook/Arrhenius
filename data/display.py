@@ -71,6 +71,27 @@ VARIABLE_METADATA = {
 }
 
 
+def image_file_name(basename: str,
+                    config: 'ArrheniusConfig') -> str:
+    """
+    Returns the name of an image file generated from a model run that used
+    config as its configuration settings, with basename as an additional
+    specification that is placed inside the name. This specification should
+    describe which parts of the model run are included in the image, such
+    as time units and/or levels, and which variable is being displayed.
+
+    :param basename:
+        A description of the data the image will display
+    :param config:
+        Configuration options for the model run the image is based on
+    :return:
+        A name for the image file
+    """
+    return "_".join([config.run_id(), basename,
+                     "[{}x{}]".format(*config.colorbar())])\
+              .replace(".", "")
+
+
 class ModelImageRenderer:
     """
     A converter between gridded climate data and image visualizations of the
@@ -219,7 +240,6 @@ def write_image_type(data: np.ndarray,
                                 "Preparing to write {} images"
                                 .format(data_type))
 
-    img_base_name = "_".join([config.run_id(), data_type])
     file_ext = '.png'
 
     annual_avg = np.array([np.mean(data, axis=0)])
@@ -229,7 +249,8 @@ def write_image_type(data: np.ndarray,
 
     # Write an image file for each time segment.
     for i in range(len(data)):
-        img_name = "_".join([img_base_name, str(i) + file_ext])
+        base_name = data_type + "_" + str(i)
+        img_name = image_file_name(base_name, config) + file_ext
         img_path = path.join(output_path, img_name)
 
         new_created = not Path(img_path).is_file()
@@ -456,8 +477,10 @@ def save_from_dataset(dataset_parent: str,
     parent_path = path.join(dataset_parent, var_name)
     Path(parent_path).mkdir(exist_ok=True)
 
-    # Detect if the desired image file already exists.
-    file_name = "_".join([run_id, var_name, str(time_seg)]) + ".png"
+    # Detect if the desired image file already exists
+    file_ext = ".png"
+    base_name = var_name + "_" + str(time_seg)
+    file_name = image_file_name(base_name, config) + file_ext
     img_path = path.join(parent_path, file_name)
 
     if not Path(img_path).is_file():
