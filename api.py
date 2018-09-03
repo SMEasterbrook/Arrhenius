@@ -1,5 +1,4 @@
 from flask import request, Response, jsonify, send_from_directory
-from typing import Dict
 from website import app
 
 from os import path
@@ -9,11 +8,11 @@ from base64 import b64encode
 from threading import Lock
 import shutil
 
-from core.configuration import from_json_string, RUN_ID, COLORBAR_SCALE
+from core.configuration import from_json_string, ArrheniusConfig
 from core.output_config import ReportDatatype, default_output_config
 from runner import ModelRun
 
-from data.display import OUTPUT_FULL_PATH, save_from_dataset
+from data.display import OUTPUT_FULL_PATH, save_from_dataset, image_file_name
 from data.provider import PROVIDERS
 
 
@@ -55,7 +54,7 @@ example_config = {
 }
 
 
-def ensure_model_results(config: Dict) -> (str, bool):
+def ensure_model_results(config: 'ArrheniusConfig') -> (str, bool):
     """
     Guarantee that the model run with configuration options given by config
     has been run, and its output is present on disk. Returns a full path to
@@ -76,7 +75,7 @@ def ensure_model_results(config: Dict) -> (str, bool):
         A 2-tuple containing a path to the output directory, followed by
         whether the model output was not already on disk.
     """
-    run_id = str(config[RUN_ID])
+    run_id = str(config.run_id())
     dataset_parent = path.join(OUTPUT_FULL_PATH, run_id)
     created = False
 
@@ -96,7 +95,7 @@ def ensure_model_results(config: Dict) -> (str, bool):
 def ensure_image_output(ds_parent: str,
                         var_name: str,
                         time_seg: int,
-                        config: Dict) -> (str, bool):
+                        config: 'ArrheniusConfig') -> (str, bool):
     """
     Guarantee that an image file has been produced representing the
     time_seg'th time unit of variable var_name from the NetCDF dataset
@@ -122,11 +121,9 @@ def ensure_image_output(ds_parent: str,
         A 2-tuple containing a path to the directory containing the image,
         followed by whether the image was not already on disk.
     """
-    run_id = str(config[RUN_ID])
     img_parent = path.join(ds_parent, var_name)
-
-    created = save_from_dataset(ds_parent, run_id, var_name, time_seg,
-                                config[COLORBAR_SCALE])
+    created = save_from_dataset(ds_parent, var_name, time_seg,
+                                config)
 
     return img_parent, created
 
@@ -162,7 +159,7 @@ def scientific_dataset():
     """
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
-    run_id = str(config[RUN_ID])
+    run_id = str(config.run_id())
     dataset_name = run_id + ".nc"
 
     # Check to make sure the requested dataset is available on disk,
@@ -204,7 +201,7 @@ def single_model_data(varname: str, time_seg: str):
     """
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
-    run_id = str(config[RUN_ID])
+    run_id = str(config.run_id())
 
     parent_dir, model_created = ensure_model_results(config)
 
@@ -214,7 +211,8 @@ def single_model_data(varname: str, time_seg: str):
                                                      int(time_seg), config)
     img_fs_lock.release()
 
-    file_name = "_".join([run_id, varname, time_seg + ".png"])
+    base_name = varname + "_" + str(time_seg)
+    file_name = image_file_name(base_name, config) + ".png"
     file_path = path.join(download_path, file_name)
 
     # Read the binary image file and encode in Base64 encoding.
@@ -247,7 +245,7 @@ def multi_model_data(varname: str):
     """
     # Decode JSON string from request body.
     config = from_json_string(request.data.decode("utf-8"))
-    run_id = str(config[RUN_ID])
+    run_id = str(config.run_id())
 
     # This series of zip-file-related names makes the purpose of each
     # more recognizable, but is not really necessary.
