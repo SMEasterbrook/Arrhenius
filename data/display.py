@@ -19,6 +19,7 @@ OUTPUT_FULL_PATH = path.join(Path('.').absolute(), OUTPUT_REL_PATH)
 class MidpointNormalize(Normalize):
     """
     class to help renormalize the color scale
+    Taken from https://stackoverflow.com/questions/48598291/how-to-obtain-transparency-for-masked-values-in-customised-colormap-matplotlib1
     """
     def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
         self.midpoint = midpoint
