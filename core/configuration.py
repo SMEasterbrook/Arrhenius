@@ -283,6 +283,7 @@ class ArrheniusConfig:
             A JSON object specifying configuration options
         """
         self._settings = {}
+        self._basis = basis
 
         def attempt_load(loader: Callable,
                          *vars: Optional[str]) -> None:
@@ -331,15 +332,9 @@ class ArrheniusConfig:
         try:
             attempt_load(self.set_run_id, "run_id")
         except InvalidConfigError:
-            # Remove any keys from the dictionary that do not affect ID.
-            for ignored_key in [COLORBAR_SCALE]:
-                if ignored_key in basis:
-                    del basis[ignored_key]
-            config_hash_val = abs(freeze_dict(basis).__hash__())
-
-            # Convert to hexadecimal for compaction and remove the 0x
-            # from the front.
-            self._settings[RUN_ID] = hex(config_hash_val)[2:]
+            # Leave run_id blank; if its getter method is called, an ID will
+            # be generated at that time.
+            pass
 
     def __setitem__(self: 'ArrheniusConfig',
                     key: str,
@@ -370,6 +365,26 @@ class ArrheniusConfig:
             raise AttributeError("No configuration option {} has been set"
                                  .format(key))
 
+    def _generate_run_id(self: 'ArrheniusConfig') -> str:
+        """
+        Returns an auto-generated ID for a model run with this configuration
+        set. ID's for different model runs are most likely going to be unique,
+        although that property is not enforced.
+
+        :return:
+            An auto-generated ID for the configuration set
+        """
+        # Remove any keys from the dictionary that do not affect ID.
+        to_remove = [COLORBAR_SCALE]
+        for ignored_key in to_remove:
+            if ignored_key in self._basis:
+                del self._basis[ignored_key]
+        config_hash_val = abs(freeze_dict(self._basis).__hash__())
+
+        # Convert to hexadecimal for compaction and remove the 0x
+        # from the front.
+        return hex(config_hash_val)[2:]
+
     def set_run_id(self: 'ArrheniusConfig',
                    run_id: str) -> None:
         """
@@ -384,6 +399,7 @@ class ArrheniusConfig:
             raise InvalidConfigError("\"run_id\" cannot be an empty string")
 
         self._settings[RUN_ID] = run_id
+        self._basis["run_id"] = run_id
 
     def set_year(self: 'ArrheniusConfig',
                  year: int) -> None:
@@ -396,6 +412,7 @@ class ArrheniusConfig:
             The year from which model data will be pulled
         """
         self._settings[YEAR] = year
+        self._basis[YEAR] = year
 
     def set_co2_bounds(self: 'ArrheniusConfig',
                        co2: Dict[str, float]) -> None:
@@ -423,6 +440,7 @@ class ArrheniusConfig:
 
         self._settings[CO2_INIT] = co2["from"]
         self._settings[CO2_FINAL] = co2["to"]
+        self._basis["co2"] = co2
 
     def set_grid(self: 'ArrheniusConfig',
                  grid: Dict[str, Union[str, Dict[str, int]]]) -> None:
@@ -450,6 +468,7 @@ class ArrheniusConfig:
                                          " field for grid dimensions")
         dims_tuple = (dims["lat"], dims["lon"])
         self._settings[GRID] = GridDimensions(dims_tuple, grid.get("repr", "width"))
+        self._basis["grid"] = grid
 
     def set_layers(self: 'ArrheniusConfig',
                    layers: int) -> None:
@@ -465,6 +484,7 @@ class ArrheniusConfig:
                                      " (is {})".format(layers))
 
         self._settings[NUM_LAYERS] = layers
+        self._basis["layers"] = layers
 
     def set_iters(self: 'ArrheniusConfig',
                   iters: int) -> None:
@@ -480,6 +500,7 @@ class ArrheniusConfig:
                                      " non-negative (is {})".format(iters))
 
         self._settings[NUM_ITERS] = iters
+        self._basis["iters"] = iters
 
     def set_aggregations(self: 'ArrheniusConfig',
                          agg_lat: Optional[str] = None,
@@ -505,6 +526,7 @@ class ArrheniusConfig:
                                          + ops_example + " (is \"{}\")."
                                          .format(agg_lat))
             self._settings[AGGREGATE_LAT] = agg_lat
+            self._basis["aggregate_lat"] = agg_lat
 
         if agg_level is not None:
             if agg_level not in options:
@@ -512,6 +534,7 @@ class ArrheniusConfig:
                                          + ops_example + " (is \"{}\")."
                                          .format(agg_level))
             self._settings[AGGREGATE_LEVEL] = agg_level
+            self._basis["aggregate_level"] = agg_level
 
     def set_providers(self: 'ArrheniusConfig',
                       temperature: Optional[str] = None,
@@ -551,6 +574,7 @@ class ArrheniusConfig:
                                          + example + " (is \"{}\")."
                                          .format(temperature))
             self._settings[TEMP_SRC] = temp_options[temperature]
+            self._basis["temp_src"] = temperature
 
         if humidity is not None:
             if humidity not in humidity_options:
@@ -560,6 +584,7 @@ class ArrheniusConfig:
                                          + example + " (is \"{}\")."
                                          .format(humidity))
             self._settings[HUMIDITY_SRC] = humidity_options[humidity]
+            self._basis["humidity_src"] = humidity
 
         if albedo is not None:
             if albedo not in albedo_options:
@@ -569,6 +594,7 @@ class ArrheniusConfig:
                                          + example + " (is \"{}\")."
                                          .format(albedo))
             self._settings[ALBEDO_SRC] = albedo_options[albedo]
+            self._basis["albedo_src"] = albedo
 
         if absorbance is not None:
             if absorbance not in absorbance_options:
@@ -578,6 +604,7 @@ class ArrheniusConfig:
                                          + example + " (is \"{}\")."
                                          .format(absorbance))
             self._settings[ABSORBANCE_SRC] = absorbance
+            self._basis["absorbance_src"] = absorbance
 
         if pressure is not None:
             if absorbance == ABS_SRC_TABLE:
@@ -611,6 +638,7 @@ class ArrheniusConfig:
         if co2_weight_func in options:
             self._settings[CO2_WEIGHT] =\
                 _transparency_weight_converter[co2_weight_func]
+            self._basis["CO2_weight"] = co2_weight_func
         else:
             example = "\"" + "\", \"".join(options[:-1])\
                       + "\", and \"" + options[-1] + "\""
@@ -621,6 +649,7 @@ class ArrheniusConfig:
         if h2o_weight_func in options:
             self._settings[H2O_WEIGHT] =\
                 _transparency_weight_converter[h2o_weight_func]
+            self._basis["H2O_weight"] = h2o_weight_func
         else:
             example = "\"" + "\", \"".join(options[:-1]) \
                       + "\", and \"" + options[-1] + "\""
@@ -645,6 +674,7 @@ class ArrheniusConfig:
                                              colorbar_scale[1]))
 
         self._settings[COLORBAR_SCALE] = colorbar_scale
+        self._basis["scale"] = colorbar_scale
 
     def run_id(self: 'ArrheniusConfig') -> str:
         """
@@ -653,7 +683,12 @@ class ArrheniusConfig:
         :return:
             The configuration's ID
         """
-        return self._settings[RUN_ID]
+        try:
+            return self._settings[RUN_ID]
+        except KeyError:
+            new_hash = self._generate_run_id()
+            self._settings[RUN_ID] = new_hash
+            return new_hash
 
     def year(self: 'ArrheniusConfig') -> int:
         """
