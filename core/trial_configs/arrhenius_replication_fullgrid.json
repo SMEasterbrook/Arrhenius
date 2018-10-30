@@ -1,0 +1,23 @@
+{
+    "co2": {
+        "from": 1,
+        "to": 2
+    },
+    "year": 1895,
+    "grid": {
+        "dims": {
+            "lat": 10,
+            "lon": 20
+        },
+        "repr": "width"
+    },
+    "layers": 1,
+    "iters": 1,
+    "aggregate_lat": "none",
+    "aggregate_level": "none",
+    "temp_src": "arrhenius",
+    "humidity_src": "arrhenius",
+    "albedo_src": "flat",
+    "absorbance_src": "table",
+    "scale": [0, 8]
+}
