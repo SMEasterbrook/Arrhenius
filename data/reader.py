@@ -12,8 +12,10 @@ class NetCDFReader:
                  file_name: str,
                  format: str = "NETCDF4") -> None:
         """
-        Create a TimeboundNetCDFReader to access data in a NetCDF file.
+        Create a NetCDFReader to access data in a NetCDF file.
+
         The file is lazy-loaded upon the first call to the read method.
+
         :param file_name:
             The NetCDF file in which the desired dataset is contained
         :param format:
@@ -65,6 +67,9 @@ class NetCDFReader:
         :return: The dataset's longitude variable
         """
         return self.collect_untimed_data("longitude")
+
+    def close(self: 'NetCDFReader') -> None:
+        self._data.close()
 
 
 class TimeboundNetCDFReader(NetCDFReader):

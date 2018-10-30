@@ -46,18 +46,19 @@ class BerkeleyEarthTemperatureReader(TimeboundNetCDFReader):
         return var[start_ind:start_ind + 12, :, :]
 
 
-class NCEPHumidityReader(TimeboundNetCDFReader):
+class NCEPReader(TimeboundNetCDFReader):
     """
     A NetCDF dataset reader specialized for reading from the NCEP/NCAR
     Reanalysis I dataset.
     """
 
-    def __init__(self: 'NCEPHumidityReader',
+    def __init__(self: 'NCEPReader',
+                 data_type: str,
                  format: str = "NETCDF4") -> None:
-        file_name = DATASET_PATH + DATASETS['water']['NCEP/NCAR']
-        super(NCEPHumidityReader, self).__init__(file_name, format)
+        file_name = DATASET_PATH + DATASETS[data_type]['NCEP/NCAR']
+        super(NCEPReader, self).__init__(file_name, format)
 
-    def collect_timed_data(self: 'NCEPHumidityReader',
+    def collect_timed_data(self: 'NCEPReader',
                            datapoint: str,
                            year: int) -> ndarray:
         self._open_dataset()
@@ -71,8 +72,52 @@ class NCEPHumidityReader(TimeboundNetCDFReader):
         # Slice the dataset across the selected range of years.
         return var[start_ind:start_ind + 12, 0, :, :]
 
-    def latitude(self: 'NCEPHumidityReader') -> ndarray:
+    def collect_layer_data(self: 'NCEPReader',
+                             datapoint: str,
+                             layer_num: int) -> ndarray:
+        """
+        Collect the data for the specified datapoint for a single layer
+        across the whole time of the dataset.
+
+        :param datapoint:
+            The name of the variable requested from the dataset
+        :param layer_num:
+            The layer in the dataset to choose, with 1 being the lowest
+            in altitude and 8 being the highest
+        :return:
+            An array of the relative humidity values across the 1900's
+        """
+        self._open_dataset()
+
+        data = self._dataset()
+        var = data.variables[datapoint]
+
+        return var[:, layer_num, :, :]
+
+    def collect_timed_layered_data(self: 'NCEPReader',
+                                 datapoint: str,
+                                 year: int) -> ndarray:
+        self._open_dataset()
+
+        data = self._dataset()
+        var = data.variables[datapoint]
+
+        # Translate the year into an index in the dataset.
+        year_delta = year - 1948
+        start_ind = year_delta * 12
+
+        return var[start_ind:start_ind + 12, :, :, :]
+
+    def pressure(self: 'NCEPReader') -> ndarray:
+        return self.collect_untimed_data("level")
+
+    def latitude(self: 'NCEPReader') -> ndarray:
         return self.collect_untimed_data("lat")
 
-    def longitude(self: 'NCEPHumidityReader') -> ndarray:
+    def longitude(self: 'NCEPReader') -> ndarray:
         return self.collect_untimed_data("lon")
+
+
+if __name__ == '__main__':
+    faab = NCEPReader("temperature")
+    faab._open_dataset()

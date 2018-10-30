@@ -1,7 +1,37 @@
+import numpy as np
+from core.configuration import WeightFunc
+
+from lowtran import userhoriztrans
+from typing import Dict, Tuple
+
+
 # Constants for absolute humidity calculations
 CONST_A = 4.6543
 CONST_B = 1435.264
 CONST_C = -64.848
+
+# transparency calculation data
+RELATIVE_INTENSITIES = np.array([3.4, 11.6, 24.8, 45.9, 84.0, 121.7, 161.0,
+                                 189.0, 210.0, 210.0, 188.0, 147.0, 105.0,
+                                 103.0, 99.0, 60.0, 51.0, 65.0, 62.0,
+                                 43.0, 39.0])
+RELATIVE_INTENSITIES_2 = np.array([27.2, 34.5, 29.6, 26.4, 27.5, 24.5, 13.5, 21.4, 44.4, 59, 70, 75.5, 62.9, 56.4, 51.4, 39.1, 37.9, 36.3, 32.7, 29.8, 21.9])
+
+TOTAL_INTENSITY = RELATIVE_INTENSITIES.sum()
+
+# absorption coefficient data
+CO2_COEFFICIENTS = np.array([0.0, -.0296, -.0559, -.1070, -.3412, -.2035,
+                             -.2438, -.3760, -.1877, -.0931, -.0280, -.0416,
+                             -.2067, -.2466, -.2571, -.1652, -.0940, -.1992,
+                             -.1742, -.0188, -.0891])
+WATER_VAPOR_COEFFICIENTS = np.array([-.1455, -.1105, -.0952, -.0862, -.0068,
+                                     -.3114, -.2362, -.1933, -.3198, -.1576,
+                                     -.1661, -.2036, -.0484, 0.0, -.0507, 0.0,
+                                     -.1184, -.0628, -.1408, -.1817, -.1444])
+
+ANGLE_CORRECTIONS = np.array([np.pi / 12, np.pi / 6,
+                              np.pi / 4, np.pi / 3,
+                              (5 * np.pi) / 12, np.pi / 2])
 
 TRANSPARENCY = {
     (1.0, .3): .372, (1.0, .5): .350, (1.0, 1.0): .307, (1.0, 1.5): .269,
@@ -52,42 +82,183 @@ MEAN_PATH = {
     (2.5, 3.0): 1.41,
     (3.0, .3):  1.52, (3.0, .5): 1.51, (3.0, 1.0): 1.47, (3.0, 2.0): 1.44,
     (3.0, 3.0): 1.4,
-    (3.5, .3): 1.48, (3.5, .5): 1.48, (3.5, 1.0): 1.45, (3.5, 2.0): 1.42,
+    (3.5, .3): 1.48, (3.5, .5): 1.48, (3.5, 1.0): 1.45, (3.5, 2.0): 1.42
 }
 
 
 def calculate_transparency(co2: float,
                            temperature: float,
-                           relative_humidity: float) -> float:
+                           relative_humidity: float,
+                           co2_weight_func: WeightFunc,
+                           h2o_weight_func: WeightFunc) -> float:
     """
     Calculate the transparency for a grid cell with the given data.
 
     :param co2:
         The amount of CO2 in the atmosphere
-
     :param temperature:
         The average temperature of the grid cell
     :param relative_humidity:
         The relative humidity of the grid cell
-
+    :param co2_weight_func:
+        Function that determine the weights of low and high estimations
+        for CO2 transparency
+    :param h2o_weight_func:
+        Function that determine the weights of low and high estimations
+        for H2O transparency
     :return:
         The B value corresponding to a grid cell with the given conditions
     """
-    water_vapor = calculate_water_vapor(temperature, relative_humidity)
-    p = calculate_mean_path(co2, water_vapor)
+    h2o = calculate_water_vapor(temperature, relative_humidity)
+    p = calculate_mean_path(co2, h2o)
 
     # find transparency percent from preprogrammed table
     keys = list(TRANSPARENCY.keys())
-    closest_co2 = keys[0][0]
-    closest_h2o = keys[0][1]
-    for key in keys:
-        if key[0] < p * co2:
-            closest_co2 = key[0]
-        if abs(p * water_vapor - key[1]) < abs(p * water_vapor - closest_h2o):
-            closest_h2o = key[1]
+    lower_co2_ind = -1
+    lower_h2o_ind = -1
+    for i in range(len(keys)):
+        if keys[i][0] < p * co2:
+            lower_co2_ind = i
+        if keys[i][1] < p * h2o:
+            lower_h2o_ind = i
 
-    transparency = TRANSPARENCY.get((closest_co2, closest_h2o))
+    lower_co2 = keys[max(0, lower_co2_ind)][0]
+    upper_co2 = keys[min(len(keys) - 1, lower_co2_ind + 1)][0]
+
+    lower_h2o = keys[max(0, lower_h2o_ind)][1]
+    upper_h2o = keys[min(len(keys) - 1, lower_h2o_ind + 1)][1]
+
+    lower_co2_weight, upper_co2_weight = \
+        co2_weight_func(lower_co2, upper_co2, p * co2)
+
+    lower_h2o_weight, upper_h2o_weight = \
+        h2o_weight_func(lower_h2o, upper_h2o, p * h2o)
+
+    co2_lower_h2o_lower = TRANSPARENCY.get((lower_co2, lower_h2o))
+    co2_upper_h2o_lower = TRANSPARENCY.get((upper_co2, lower_h2o))
+    co2_lower_h2o_upper = TRANSPARENCY.get((lower_co2, upper_h2o))
+    co2_upper_h2o_upper = TRANSPARENCY.get((upper_co2, upper_h2o))
+
+    transparency = co2_lower_h2o_lower * (lower_co2_weight * lower_h2o_weight)\
+        + co2_lower_h2o_upper * (lower_co2_weight * upper_h2o_weight)\
+        + co2_upper_h2o_lower * (upper_co2_weight * lower_h2o_weight)\
+        + co2_upper_h2o_upper * (upper_co2_weight * upper_h2o_weight)
+
     return transparency
+
+
+def calculate_vert_trans(co2: float,
+                           temperature: float,
+                           relative_humidity: float) -> float:
+    """
+    Calculate the transparency for only the radiation rays emanating
+    normal to the surface of Earth.
+
+    :param co2:
+        The amount of cc2 in the atmosphere
+    :param temperature:
+        The average temperature of the Earth's surface
+    :param relative_humidity:
+        The relative humidity of the atmosphere
+    :return:
+        The fraction of rays that escape the Earth's atmosphere
+    """
+    h2o = calculate_water_vapor(temperature, relative_humidity)
+
+    total_intensity = RELATIVE_INTENSITIES.sum()
+    co2_transmissions = CO2_COEFFICIENTS * co2
+    h2o_transmissions = WATER_VAPOR_COEFFICIENTS * h2o
+    remaining_intensities = RELATIVE_INTENSITIES \
+                            * np.power(10,
+                                       co2_transmissions + h2o_transmissions)
+
+    return remaining_intensities.sum() / total_intensity / 2
+
+
+def calculate_modern_transparency(co2: float, temp: float,
+                                  relative_humidity: float, height: float,
+                                  dist: float, pressure: float = 949.0) -> float:
+    """
+    Calculate the transparency of the atmosphere using LOWTRAN, a modern
+    climate calculation model and tool.
+
+    :param co2:
+        The co2 in the atmosphere at the chosen height in ppmv
+    :param temp:
+        The temperature of the atmosphere at the chosen height in Kelvin
+    :param relative_humidity:
+        The relative humidity of the atmosphere at the chosen height
+    :param height:
+        The altitude at which the radiation is traveling, in km
+    :param dist:
+        The distance the radiation travels through the atmosphere, in km
+    :param pressure:
+        Optional parameter. The pressure of the atmosphere in millibars.
+        Defaults to the Lowtran default of 949.0 if not explicitly specified.
+    """
+    h2o = calculate_water_vapor(temp, relative_humidity)
+    p = calculate_mean_path(co2, h2o)
+
+    # convert to ppmv
+    adjusted_co2 = co2 * p * 300
+
+    # convert to ppmv from g/m^3
+    # adjusted_h2o = h2o * p * 10 * 1000 * .082057338 * temp / 18.01528
+
+    # Dufresne's h2o adjustment
+    adjusted_h2o = h2o * p * 20
+
+    parameters = {'h1': height,
+                  'zmdl': height,
+                  'range_km': dist,
+                  'wlnmlim': (200, 20000),
+                  'p': pressure,
+                  't': temp,
+                  'wmol': [adjusted_h2o, adjusted_co2, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
+                  }
+    result = userhoriztrans(parameters)
+    return float(result['transmission'].mean())
+
+
+def modern_transparency_dict(temp: float, height: float, dist: float, pressure: float = 949.0)\
+        -> Dict[Tuple[float, float], float]:
+    """
+    Create a table of transparencies for rays of radiation leaving
+    perpendicular to the Earth's surface. The transparencies correspond
+    to the different co2 and h2o pairings found in Arrhenius' original tables.
+
+    :param temp:
+        The temperature of the atmosphere
+
+    :param height:
+        The height in the atmosphere at which the transparency values
+        are calculated
+    :param dist:
+        The total length the radiation travels through the atmosphere
+    :param pressure:
+        The pressure of the atmosphere in millibars. Optional parameter
+        defaults to 949.0, the Lowtran default.
+    :return:
+        A Dict of transparency values with keys of co2 and h2o pairings/tuples
+    """
+    co2_values = [1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0, 10.0, 20.0, 40.0]
+    h2o_values = [.3, .5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 10.0]
+    parameters = {'h1': height,
+                  'zmdl': height,
+                  'range_km': dist,
+                  'wlnmlim': (200, 20000),
+                  'p': 949.0,
+                  't': temp,
+                  }
+    final_table = {}
+
+    for co2 in co2_values:
+        for h2o in h2o_values:
+            parameters['wmol'] = [co2, h2o, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
+            lowtran_result = userhoriztrans(parameters)
+            final_table[(co2, h2o)] = float(lowtran_result['transmission'].mean())
+
+    return final_table
 
 
 def calculate_water_vapor(temperature: float,
@@ -108,6 +279,8 @@ def calculate_water_vapor(temperature: float,
     # pressure equation constants A, B, & C from:
     # https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=4
     #                                        &Type=ANTOINE&Plot=on#ANTOINE
+    if temperature < 0 or relative_humidity < 0 or relative_humidity > 100:
+        raise AttributeError
 
     pressure_saturation = 10 ** (CONST_A - (CONST_B/(temperature + CONST_C)))
 
@@ -128,17 +301,27 @@ def calculate_mean_path(co2: float,
     at different angles relative to the earth's surface.
 
     :param co2:
-        The amount of CO2 in the atmosphere
+        The amount of CO2 in the atmosphere in Arrhenius' units
     :param water_vapor:
         The amount of water vapor in the air in Arrhenius' units
     :return:
         The p value for the CO2 and water vapor of a grid cell with
         the given values
     """
+    if co2 < 0 or water_vapor < 0:
+        raise AttributeError
+
+    co2_valid = False
+
     keys = list(MEAN_PATH.keys())
     closest_water_vapor = keys[0][1]
     for key in keys:
+        if co2 == key[0]:
+            co2_valid = True
         if abs(water_vapor - key[1]) < abs(water_vapor - closest_water_vapor):
             closest_water_vapor = key[1]
+
+    if co2_valid is False:
+        raise AttributeError
 
     return MEAN_PATH.get((co2, closest_water_vapor))

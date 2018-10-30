@@ -1,0 +1,102 @@
+{
+    "title": "Arrhenius model configuration",
+    "description": "Configuration settings for a run of The Arrhenius Project's climate model",
+
+    "type": "object",
+    "properties": {
+        "co2": {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "number",
+                    "minimumExclusive": 0
+                },
+                "to": {
+                    "type": "number",
+                    "minimumExclusive": 0
+                }
+            },
+            "required": ["from", "to"]
+        },
+        "year": {
+            "type": "integer"
+        },
+	"grid": {
+            "type": "object",
+	    "properties": {
+                "repr": {
+                    "type": "string"
+                },
+                "dims": {
+                     "type": "object",
+                     "properties": {
+                         "lat": {
+                             "type": "number",
+                             "minimumExclusive": 0
+                         },
+                         "lon": {
+                             "type": "number",
+                             "minimumExclusive": 0
+                         }
+                     },
+
+                     "required": ["lat", "lon"]
+                }
+            },
+
+            "required": ["dims"]
+        },
+        "num_layers": {
+            "type": "integer",
+	    "minimum": 1
+        },
+        "num_iters": {
+            "type": "integer",
+	    "minimum": 1
+        },
+        "aggregate_lat": {
+            "type": "string"
+        },
+	"aggregate_level": {
+            "type": "string"
+        },
+        "temp_src": {
+            "type": "string"
+        },
+        "humidity_src": {
+            "type": "string"
+        },
+        "albedo_src": {
+            "type": "string"
+        },
+        "absorbance_src": {
+            "type": "string"
+        },
+        "CO2_weight": {
+            "type": "string"
+        },
+        "H2O_weight": {
+            "type": "string"
+        },
+        "scale": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+                "type": "number"
+            }
+        }
+    },
+
+    "required": [
+	    "co2",
+	    "year",
+	    "layers",
+	    "iters",
+	    "aggregate_lat",
+	    "temp_src",
+	    "humidity_src",
+	    "albedo_src",
+	    "absorbance_src"
+    ]
+}
