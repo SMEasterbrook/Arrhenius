@@ -6,11 +6,12 @@
     "year": 2017,
     "grid": {
         "dims": {
-            "lat": 5,
-            "lon": 6
+            "lat": 10,
+            "lon": 20
         },
         "repr": "width"
     },
+    "layers": 1,
     "iters": 1,
     "aggregate_lat": "none",
     "aggregate_level": "none",

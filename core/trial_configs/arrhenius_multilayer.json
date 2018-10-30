@@ -6,8 +6,8 @@
     "year": 2017,
     "grid": {
         "dims": {
-            "lat": 20,
-            "lon": 40
+            "lat": 10,
+            "lon": 20
         },
         "repr": "width"
     },
