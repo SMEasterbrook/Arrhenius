@@ -21,9 +21,9 @@
         "year": {
             "type": "integer"
         },
-	"grid": {
+        "grid": {
             "type": "object",
-	    "properties": {
+            "properties": {
                 "repr": {
                     "type": "string"
                 },
@@ -39,25 +39,23 @@
                              "minimumExclusive": 0
                          }
                      },
-
                      "required": ["lat", "lon"]
                 }
             },
-
             "required": ["dims"]
         },
-        "num_layers": {
+        "layers": {
             "type": "integer",
-	    "minimum": 1
+            "minimum": 1
         },
-        "num_iters": {
+        "iters": {
             "type": "integer",
-	    "minimum": 1
+            "minimum": 1
         },
         "aggregate_lat": {
             "type": "string"
         },
-	"aggregate_level": {
+        "aggregate_level": {
             "type": "string"
         },
         "temp_src": {
@@ -90,8 +88,7 @@
 
     "required": [
 	    "co2",
-	    "year",
-	    "layers",
+        "grid",
 	    "iters",
 	    "aggregate_lat",
 	    "temp_src",
