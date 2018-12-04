@@ -117,8 +117,8 @@ class ModelRun:
         ground_layer = [time_seg[0] for time_seg in self.grids]
 
         print_solo_statistics(ground_layer)
-        if expected is not None:
-            print_relation_statistics(ground_layer, expected)
+        # if expected is not None:
+        #     print_relation_statistics(ground_layer, expected)
 
         # Finally, write model output to disk.
         out_cnf.global_output_center().submit_collection_output(
@@ -630,4 +630,5 @@ if __name__ == '__main__':
     out_cont.enable_output_type(out_cnf.AccuracyMetrics.TEMP_DELTA_VARIANCE)
 
     model = ModelRun(conf, out_cont)
-    grids = model.run_model(X2_EXPECTED)
+    # grids = model.run_model(X2_EXPECTED)
+    grids = model.run_model()
