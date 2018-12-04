@@ -630,4 +630,4 @@ if __name__ == '__main__':
     out_cont.enable_output_type(out_cnf.AccuracyMetrics.TEMP_DELTA_VARIANCE)
 
     model = ModelRun(conf, out_cont)
-    grids = model.run_model(X2_EXPECTED)
+    grids = model.run_model()
