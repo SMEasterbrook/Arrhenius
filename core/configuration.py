@@ -203,7 +203,7 @@ _transparency_weight_converter: Dict[str, WeightFunc] = {
 
 # Preloaded configuration files.
 JSON_DEFAULT = path.join(MAIN_PATH, 'core', 'trial_configs',
-                         'arrhenius_cooling.json')
+                         'arrhenius_legacy.json')
 JSON_SCHEMA_FILE = path.join(MAIN_PATH, 'core', 'config_schema.json')
 
 json_schema = json.loads(open(JSON_SCHEMA_FILE, "r").read())
@@ -312,17 +312,21 @@ class ArrheniusConfig:
                 if isinstance(key, tuple):
                     option = key[0]
                     backup = key[1]()
-                else:
+                elif key is not None:
                     option = key
                     backup = None
+                else:
+                    params.append(None)
+                    continue
 
                 if option in basis:
                     params.append(basis[option])
                 elif backup is not None:
                     params.append(backup)
                 else:
-                    raise InvalidConfigError("\"" + key + "\" is a required"
-                                             " configuration field.")
+                    raise InvalidConfigError("\"{}\" is a required"
+                                             " configuration field."
+                                             .format(key))
 
             loader(*params)
 
