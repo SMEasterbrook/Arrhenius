@@ -9,7 +9,7 @@ from data.grid import LatLongGrid, GridDimensions,\
 
 from core.configuration import global_config, ArrheniusConfig
 from core.output_config import global_output_center, ReportDatatype, Debug,\
-    DATASET_VARS, IMAGES
+    DATASET_VARS, IMAGES, IMAGES_PATH, DATASET_VARS_PATH
 
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap

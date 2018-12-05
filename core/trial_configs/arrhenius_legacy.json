@@ -3,13 +3,13 @@
         "from": 1,
         "to": 2
     },
-    "year": 1895,
+    "year": 1980,
     "grid": {
         "dims": {
-            "lat": 10,
-            "lon": 20
+            "lat": 9,
+            "lon": 9
         },
-        "repr": "width"
+        "repr": "count"
     },
     "layers": 1,
     "iters": 1,

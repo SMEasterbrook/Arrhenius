@@ -67,7 +67,7 @@ class NCEPReader(TimeboundNetCDFReader):
         var = data.variables[datapoint]
 
         # Translate the year into an index in the dataset.
-        year_delta = year - 1948
+        year_delta = year - 1979
         start_ind = year_delta * 12
         # Slice the dataset across the selected range of years.
         return var[start_ind:start_ind + 12, 0, :, :]
@@ -103,7 +103,7 @@ class NCEPReader(TimeboundNetCDFReader):
         var = data.variables[datapoint]
 
         # Translate the year into an index in the dataset.
-        year_delta = year - 1948
+        year_delta = year - 1979
         start_ind = year_delta * 12
 
         return var[start_ind:start_ind + 12, :, :, :]
@@ -116,8 +116,3 @@ class NCEPReader(TimeboundNetCDFReader):
 
     def longitude(self: 'NCEPReader') -> ndarray:
         return self.collect_untimed_data("lon")
-
-
-if __name__ == '__main__':
-    faab = NCEPReader("temperature")
-    faab._open_dataset()

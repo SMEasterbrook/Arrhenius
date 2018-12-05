@@ -250,7 +250,7 @@ def modern_transparency_dict(temp: float, height: float, dist: float, pressure: 
                   'range_km': dist,
                   'wlshort': 200,
                   'wllong': 20000,
-                  'wlstep': 200,
+                  'wlstep': 1000,
                   'p': 949.0,
                   't': temp,
                   }
