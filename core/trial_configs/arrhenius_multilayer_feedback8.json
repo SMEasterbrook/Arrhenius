@@ -12,7 +12,7 @@
         "repr": "width"
     },
     "layers": 17,
-    "iters": 1,
+    "iters": 8,
     "aggregate_lat": "none",
     "aggregate_level": "none",
     "temp_src": "ncar",

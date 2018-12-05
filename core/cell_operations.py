@@ -213,7 +213,7 @@ def calculate_modern_transparency(co2: float, temp: float,
                   'range_km': dist,
                   'wlshort': 200,
                   'wllong': 20000,
-                  'wlstep': 200,
+                  'wlstep': 1000,
                   'p': pressure,
                   't': temp,
                   'wmol': [adjusted_h2o, adjusted_co2, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
