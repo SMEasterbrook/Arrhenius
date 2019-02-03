@@ -24,34 +24,57 @@ def build_multilayer_matrix(transparencies):
         A square (n+1) x (n+1) coefficient matrix representing atmospheric
         balance equations in the atmosphere.
     """
+    # Number of atmospheric layers (excluding space).
     n = transparencies.shape[0] - 1
-    # Precompute the fraction of energy that makes it from atmospheric layer
-    # a to layer b, and store it in path_transparencies[a, b].
+    absorptivities = 1 - transparencies
+
+    # path_transparencies[j, i] represents the fraction of energy emitted from
+    # the top of layer j that arrives at the bottom of layer i unabsorbed.
     path_transparencies = np.zeros((n+1, n+1))
     for i in range(1, n+1):
-        path_transparencies[:, i] = path_transparencies[:, i-1]\
-                                    * (1 - transparencies[i - 1])
-        path_transparencies[i-1, i] = 1
+        # Compute the fraction of energy reaching layer i from all layers j
+        # stored in the path_transparencies[:, i-1] vector by multiplying the
+        # fraction that makes it from j to (i - 1) by the transparency of
+        # layer (i - 1).
+        path_transparencies[:, i] = path_transparencies[:, i - 1] \
+                                    * transparencies[i - 1]
+        # Document that transfer from layer (i - 1) to i is uninterrupted.
+        path_transparencies[i - 1, i] = 1
 
-    # Extend the layer-to-layer transparencies to get layer-to-space
-    # transparencies, assuming space has transparency of 0.
+    # Compute the fraction of energy making it from the top of layer i to
+    # space by multiplying the fraction between layers i and n (top layer)
+    # by the transparency of the top layer.
     transparencies_to_space = path_transparencies[:, n].copy()\
-                              * (1 - transparencies[n])
+                              * transparencies[n]
+    # Energy transfer between the top layer and space is uninterrupted.
     transparencies_to_space[n] = 1
-    paths_to_space = np.multiply(transparencies_to_space, transparencies)
 
-    # Compute coefficients on heat transfer from layer a to layer b, and
-    # store it in path_coefficients[a, b].
-    path_coefficients = path_transparencies.copy() * transparencies\
-                        * transparencies[:, np.newaxis]
+    # Get the actual energy transfer coefficient between each layer and space
+    # by multiplying the emissivity of the layer (same as its absorptivity)
+    # and the absorptivity of space (assumed 1) with the transparency between
+    # the two.
+    paths_to_space = np.multiply(transparencies_to_space, absorptivities)
+
+    # Do the equivalent calculation between any two atmospheric layers, except
+    # multiplying by the upper layer's absorptivity instead of 1. Multiplies
+    # each element at index [i, j] by the absorptivities of those two layers.
+    path_coefficients = path_transparencies.copy() * absorptivities \
+                        * absorptivities[:, np.newaxis]
 
     # Assemble the matrix form using energy balance equations.
     atm_balance_matrix = np.ones((n+1, n+1))
     for i in range(n+1):
         if i > 0:
+            # Copy the negation of the energy transfer coefficients to fill in
+            # the beginning of the matrix row, up to the diagonal, with terms
+            # of increasing source layer (first index in path_coefficients).
             atm_balance_matrix[i, :i] = -path_coefficients[0:i, i]
         if i < n:
+            # Fill in the matrix row after the diagonal with terms of
+            # increasing destination layer (second index in path_coefficients).
             atm_balance_matrix[i, i+1:] = -path_coefficients[i, i+1:]
+
+        # Fill in the matrix diagonals.
         atm_balance_matrix[i, i] = paths_to_space[i]\
                                    + path_coefficients[i, i+1:].sum()\
                                    + path_coefficients[0:i, i].sum()
