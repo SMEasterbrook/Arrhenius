@@ -467,7 +467,8 @@ def calibrate_constant(temperature: float,
     :return:
         The calculated constant K
     """
-    return pow(temperature, 4) * (1 + albedo * transparency)
+    nu = 1 - albedo
+    return pow(temperature, 4) * (1 + nu * transparency)
 
 
 def get_new_temperature(albedo: float,
@@ -484,7 +485,8 @@ def get_new_temperature(albedo: float,
     :return:
         The change in temperature for a grid cell with the given change in B
     """
-    denominator = 1 + albedo * new_transparency
+    nu = 1 - albedo
+    denominator = 1 + nu * new_transparency
 
     return pow((k / denominator), 1 / 4)
 

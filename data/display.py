@@ -231,8 +231,7 @@ class ModelImageRenderer:
 
         fig = plt.gcf()
         fig.canvas.draw()
-        print(fig.canvas.get_width_height(), len(fig.canvas.tostring_rgb()))
-        """
+
         pixels = fig.canvas.tostring_rgb()
         img = np.fromstring(pixels, dtype=np.uint8, sep='')
         img = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
@@ -255,8 +254,9 @@ class ModelImageRenderer:
         img = np.dstack((img, alphas))
         plt.imsave(fname=out_path, arr=img)
         plt.close()
-        """
-        plt.savefig(fname=out_path)
+
+        # plt.savefig(fname=out_path)
+
 
 def write_image_type(data: np.ndarray,
                      parent_path: str,

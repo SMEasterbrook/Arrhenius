@@ -397,10 +397,14 @@ def landmask_albedo_data(temp_data: np.ndarray,
     albedo_mask = np.ones((len(temp_data), grid_dims[0],
                            grid_dims[1]), dtype=float)
 
-    # Albedo values used by Arrhenius in his model calculations.
-    ocean_albedo = 0.925
-    land_albedo = 1.0
-    snow_albedo = 0.5
+    # (Inverse) albedo values used by Arrhenius in his model calculations.
+    ocean_albedo_inverse = 0.925
+    land_albedo_inverse = 1.0
+    snow_albedo_inverse = 0.5
+
+    ocean_albedo = 1 - ocean_albedo_inverse
+    land_albedo = 1 - land_albedo_inverse
+    snow_albedo = 1 - snow_albedo_inverse
 
     # Intermediate array slices are cached at each for loop iteration
     # to prevent excess array indexing.
@@ -409,7 +413,6 @@ def landmask_albedo_data(temp_data: np.ndarray,
             temp_time_segment = temp_data[i]
         else:
             temp_time_segment = temp_data[i, ..., 0, :, :]
-            print("X")
 
         for j in range(grid_dims[0]):
             landmask_row = regridded_land_coords[j]
@@ -441,19 +444,20 @@ def constant_albedo_data(temp_data: np.ndarray,
     Returns an array of absorption values for grid cells under the specified
     grid, and with the same number of time units as temp_data. Assumes that
     all grid cells have a constant absorption of 1.0, that is, that the whole
-    Earth is a black body. This assumption may have been made by Arrhenius
-    for simplicity in the original model.
+    Earth is a black body. Albedo being the inverse of absorption, the returned
+    albedo mask has a constant value of 0.0. This assumption may have been made
+    by Arrhenius for simplicity in the original model.
 
     :param temp_data:
         Temperature data for the run, straight from the dataset
     :param grid:
         The dimensions of the grid onto which the data will be converted
     :return:
-        A grid of 1's satisfying the shape of the existing data.
+        A grid of 0's satisfying the shape of the existing data.
     """
     grid_count = grid.dims_by_count()
     grid_shape = (len(temp_data), grid_count[0], grid_count[1])
-    return np.ones(grid_shape)
+    return np.zeros(grid_shape)
 
 
 def static_absorbance_data() -> float:
