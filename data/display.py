@@ -15,7 +15,7 @@ from pathlib import Path
 from mpl_toolkits.basemap import Basemap
 
 import matplotlib
-matplotlib.use("QT5Agg")
+matplotlib.use("agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
