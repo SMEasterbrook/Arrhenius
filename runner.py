@@ -377,44 +377,47 @@ class ModelRun:
         init_temperature = temperatures[0]
         transparencies = [surface_cell.get_albedo()]
 
-        for layer_num in range(len(layers) - 1):
-            temperatures.append(layers[layer_num + 1].get_temperature() + 273.15)
-            relative_humidity = layers[layer_num + 1].get_relative_humidity()
-            transparency = calculate_modern_transparency(init_co2,
-                                                         temperatures[layer_num + 1],
-                                                         relative_humidity,
-                                                         layer_dims[layer_num][0],
-                                                         layer_dims[layer_num][1],
-                                                         pressures[layer_num])
-            transparencies.append(transparency)
-        init_transparency = transparencies[1]
-
-        atm_matrix = ml.build_multilayer_matrix(np.array(transparencies))
-        coefficients = ml.calibrate_multilayer_matrix(atm_matrix,
-                                                      np.array(temperatures))
-
-        for i in range(iterations + 1):
-            transparencies = [surface_cell.get_albedo()]
+        try:
             for layer_num in range(len(layers) - 1):
+                temperatures.append(layers[layer_num + 1].get_temperature() + 273.15)
                 relative_humidity = layers[layer_num + 1].get_relative_humidity()
-                transparency = calculate_modern_transparency(new_co2,
+                transparency = calculate_modern_transparency(init_co2,
                                                              temperatures[layer_num + 1],
                                                              relative_humidity,
                                                              layer_dims[layer_num][0],
                                                              layer_dims[layer_num][1],
                                                              pressures[layer_num])
                 transparencies.append(transparency)
-            atm_matrix = ml.build_multilayer_matrix(np.array(transparencies))
-            temperatures = ml.solve_multilayer_matrix(atm_matrix, coefficients)
+            init_transparency = transparencies[1]
 
-        delta_temp_report = "{}  ~~~~  Delta T: {} K" \
-            .format(layers[0], temperatures[0] - init_temperature)
-        delta_trans_report = "{}  ~~~~  Delta Transparency: {} K" \
-            .format(layers[1], transparencies[1] - init_transparency)
-        self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TEMP,
-                                             delta_temp_report)
-        self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TRANSPARENCY,
-                                             delta_trans_report)
+            atm_matrix = ml.build_multilayer_matrix(np.array(transparencies))
+            coefficients = ml.calibrate_multilayer_matrix(atm_matrix,
+                                                          np.array(temperatures))
+
+            for i in range(iterations + 1):
+                transparencies = [surface_cell.get_albedo()]
+                for layer_num in range(len(layers) - 1):
+                    relative_humidity = layers[layer_num + 1].get_relative_humidity()
+                    transparency = calculate_modern_transparency(new_co2,
+                                                                 temperatures[layer_num + 1],
+                                                                 relative_humidity,
+                                                                 layer_dims[layer_num][0],
+                                                                 layer_dims[layer_num][1],
+                                                                 pressures[layer_num])
+                    transparencies.append(transparency)
+                atm_matrix = ml.build_multilayer_matrix(np.array(transparencies))
+                temperatures = ml.solve_multilayer_matrix(atm_matrix, coefficients)
+
+            delta_temp_report = "{}  ~~~~  Delta T: {} K" \
+                .format(layers[0], temperatures[0] - init_temperature)
+            delta_trans_report = "{}  ~~~~  Delta Transparency: {} K" \
+                .format(layers[1], transparencies[1] - init_transparency)
+            self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TEMP,
+                                                 delta_temp_report)
+            self.output_controller.submit_output(out_cnf.Debug.GRID_CELL_DELTA_TRANSPARENCY,
+                                                 delta_trans_report)
+        except np.linalg.LinAlgError:
+            temperatures = np.array([init_temperature] * len(temperatures))
 
         return temperatures - 273.15
 

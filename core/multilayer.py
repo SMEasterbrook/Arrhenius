@@ -30,20 +30,20 @@ def build_multilayer_matrix(transparencies):
     path_transparencies = np.zeros((n+1, n+1))
     for i in range(1, n+1):
         path_transparencies[:, i] = path_transparencies[:, i-1]\
-                                    * (1 - transparencies[i - 1])
+                                    * transparencies[i - 1]
         path_transparencies[i-1, i] = 1
 
     # Extend the layer-to-layer transparencies to get layer-to-space
     # transparencies, assuming space has transparency of 0.
     transparencies_to_space = path_transparencies[:, n].copy()\
-                              * (1 - transparencies[n])
+                              * transparencies[n]
     transparencies_to_space[n] = 1
-    paths_to_space = np.multiply(transparencies_to_space, transparencies)
+    paths_to_space = np.multiply(transparencies_to_space, (1 - transparencies))
 
     # Compute coefficients on heat transfer from layer a to layer b, and
     # store it in path_coefficients[a, b].
-    path_coefficients = path_transparencies.copy() * transparencies\
-                        * transparencies[:, np.newaxis]
+    path_coefficients = path_transparencies.copy() * (1 - transparencies) \
+                        * (1 - transparencies[:, np.newaxis])
 
     # Assemble the matrix form using energy balance equations.
     atm_balance_matrix = np.ones((n+1, n+1))
