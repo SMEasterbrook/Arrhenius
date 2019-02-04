@@ -409,7 +409,6 @@ def landmask_albedo_data(temp_data: np.ndarray,
             temp_time_segment = temp_data[i]
         else:
             temp_time_segment = temp_data[i, ..., 0, :, :]
-            print("X")
 
         for j in range(grid_dims[0]):
             landmask_row = regridded_land_coords[j]
