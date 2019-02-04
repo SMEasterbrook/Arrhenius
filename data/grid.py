@@ -208,7 +208,6 @@ class GridDimensions:
             The grid dimensions in terms of number of cells required to
             circle the globe
         """
-        grid_by_count = self._grid_by_count
         int_lat = int(self._grid_by_count[0])
         int_lon = int(self._grid_by_count[1])
 
@@ -337,11 +336,12 @@ class GridCell:
 
     def get_albedo(self: 'GridCell') -> float:
         """
-        Returns the average surface albedo of this grid cell. Zero denotes
-        that the cell reflects all light, and 1 that it absorbs all light.
+        Returns the average surface albedo (reflectivity) of this grid cell.
+        Zero denotes that the cell reflects all light, and 1 that it absorbs
+        all light. This is the inverse of absorptivity.
 
-        Non-surface grid cells (those at a non-zero altitude) have 0 albedo,
-        since cloud albedo is ignored.
+        Non-surface grid cells (those at a non-zero altitude) have 0 albedo
+        as a placeholder value, since cloud and atmospheric albedo is ignored.
 
         :return:
             The average surface albedo within the cell
