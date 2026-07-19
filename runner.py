@@ -607,6 +607,7 @@ if __name__ == '__main__':
 
             with open(json_filepath, "r") as json_file:
                 conf = cnf.from_json_string(json_file.read())
+                title = json_filepath.split("/")[-1].split(".")[0]
         except (KeyError, GetoptError):
             # Only catch errors resulting from improper argument passing:
             # Invalid config errors should propagate.
@@ -616,8 +617,9 @@ if __name__ == '__main__':
     else:
         # If no arguments are given, use default config.
         conf = cnf.default_config()
+        title = "arrhenius_legacy_2xCO2"
 
-    title = "arrhenius_x2"
+    #title = "arrhenius_x2"
     conf.set_run_id(title)
     conf.set_aggregations(agg_lat=cnf.AGGREGATE_NONE)
     conf.set_table_auxiliaries(cnf.WEIGHT_BY_PROXIMITY,

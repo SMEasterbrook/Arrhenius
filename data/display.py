@@ -295,6 +295,7 @@ def write_image_type(data: np.ndarray,
         get_image_directory(parent_path, config.run_id(), data_type,
                             config.colorbar(), create=True)
     file_ext = '.png'
+    print(f"Saving images to {output_path}")
 
     annual_avg = np.array([np.mean(data, axis=0)])
     data = np.concatenate([annual_avg, data], axis=0)
