@@ -1,4 +1,6 @@
 {
+    "title": "Arrhenius multi-level model for x2 CO2 with modern IR data",
+    "description": "A replication of Arrhenius original model for doubled CO2 using modern infrared absorbance data for greenhouse gases, 17 layers in the atmosphere and no water vapour feedback",
     "co2": {
         "from": 1,
         "to": 2

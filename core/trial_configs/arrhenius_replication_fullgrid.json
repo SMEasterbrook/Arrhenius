@@ -1,4 +1,6 @@
 {
+    "title": "Original Arrhenius model with x2 CO2",
+    "description": "A replication of Arrhenius original model for increased CO2 (2 x pre-industrial CO2 concentrations) and one iteration to compute the water vapour feedback",
     "co2": {
         "from": 1,
         "to": 2
@@ -12,7 +14,7 @@
         "repr": "width"
     },
     "layers": 1,
-    "iters": 1,
+    "iters": 2,
     "aggregate_lat": "none",
     "aggregate_level": "none",
     "temp_src": "arrhenius",

@@ -1,4 +1,6 @@
 {
+    "title": "Arrhenius model with x2 CO2",
+    "description": "A replication of Arrhenius original model for increased CO2 (2 x pre-industrial CO2 concentrations) to explore consequences of increased use of fossil fuels",
     "co2": {
         "from": 1,
         "to": 2
@@ -19,5 +21,5 @@
     "humidity_src": "arrhenius",
     "albedo_src": "flat",
     "absorbance_src": "table",
-    "scale": [-8, 8]
+    "scale": [0, 7]
 }

@@ -1,4 +1,6 @@
 {
+    "title": "Arrhenius model with x0.67 CO2",
+    "description": "A replication of Arrhenius original model for reduced CO2 (0.67 of pre-industrial CO2 concentrations) to explore the theory that reduced CO2 caused the ice ages. This version iterates the model 8 times to compute the water vapour feedback.",
     "co2": {
         "from": 1,
         "to": 0.67
@@ -19,5 +21,5 @@
     "humidity_src": "arrhenius",
     "albedo_src": "landmask",
     "absorbance_src": "table",
-    "scale": [-8, 8]
+    "scale": [-4, 0]
 }

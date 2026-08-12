@@ -1,4 +1,6 @@
 {
+    "title": "Modern replication of Arrhenius model with x2 CO2 and water vapour feedback",
+    "description": "A replication of Arrhenius original model for doubled CO2 using modern infrared absorbance data for greenhouse gases. This version runs the model for 8 iterations to compute the water vapour feedback",
     "co2": {
         "from": 1,
         "to": 2
