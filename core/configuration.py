@@ -47,6 +47,8 @@ ABSORBANCE_SRC = "absorbance_src"
 PRESSURE_SRC = "pressure_src"
 CO2_WEIGHT = "CO2_weight"
 H2O_WEIGHT = "H2O_weight"
+TITLE = "title"
+DESCRIPTION = "description"
 
 # Keys for grid specification substructure.
 GRID_DIMS = "dims"
@@ -342,6 +344,8 @@ class ArrheniusConfig:
         attempt_load(self.set_layers, ("layers", lambda: 1))
         attempt_load(self.set_colorbar, ("scale", lambda: (-8, 8)))
         attempt_load(self.set_year, ("year", lambda: datetime.now().year))
+        attempt_load(self.set_metadata, ("title", lambda: ""),
+                                         ("description", lambda: ""))
 
         if self._settings[ABSORBANCE_SRC] == ABS_SRC_TABLE:
             attempt_load(self.set_table_auxiliaries,
@@ -695,6 +699,25 @@ class ArrheniusConfig:
         self._settings[COLORBAR_SCALE] = colorbar_scale
         self._basis["scale"] = colorbar_scale
 
+    def set_metadata(self: 'ArrheniusConfig',
+                     title: Optional[str] = None,
+                     description: Optional[str] = None) -> None:
+        """
+        Sets one or both of the title and description options, whichever
+        one(s) is/are not None. These are plain-text strings describing the
+        model run, used to label the output graphs.
+
+        :param title:
+            A short title describing the model run
+        :param description:
+            A longer description of the model run and its settings
+        """
+        if title is not None:
+            self._settings[TITLE] = title
+
+        if description is not None:
+            self._settings[DESCRIPTION] = description
+
     def run_id(self: 'ArrheniusConfig') -> str:
         """
         Returns the unique ID for this model configuration.
@@ -884,6 +907,27 @@ class ArrheniusConfig:
             The bounds on colour values for the model's images
         """
         return self._settings[COLORBAR_SCALE]
+
+    def title(self: 'ArrheniusConfig') -> Optional[str]:
+        """
+        Returns the title given to this model run, describing what it is
+        modelling. An empty string is returned if no title was specified.
+
+        :return:
+            The model run's title
+        """
+        return self._settings[TITLE]
+
+    def description(self: 'ArrheniusConfig') -> Optional[str]:
+        """
+        Returns the description of this model run, describing the run and
+        the model settings used. An empty string is returned if no
+        description was specified.
+
+        :return:
+            The model run's description
+        """
+        return self._settings[DESCRIPTION]
 
 
 def from_json_string(json_data: str) -> Config:
