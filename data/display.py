@@ -22,6 +22,30 @@ import numpy as np
 
 OUTPUT_FULL_PATH = path.join(Path('.').absolute(), OUTPUT_REL_PATH)
 
+
+def get_run_directory(run_title: str) -> str:
+    """
+    Returns the path to the output directory for the next run of the model
+    with the given run title.
+
+    Runs are stored in sibling directories under the output directory, with
+    an incrementing run number appended to the title. The first run is
+    stored in run_title_run1, the second in run_title_run2, and so on, so
+    that output from earlier runs is never overwritten.
+
+    :param run_title:
+        The title of the model run
+    :return:
+        The path to the output directory for this run
+    """
+    run_number = 1
+    while True:
+        candidate = path.join(OUTPUT_FULL_PATH,
+                              "{}_run{}".format(run_title, run_number))
+        if not Path(candidate).exists():
+            return candidate
+        run_number += 1
+
 # Keys in the dictionary below.
 VAR_TYPE = "Type"
 
@@ -140,6 +164,94 @@ def get_image_directory(parent: str,
     return out_dir_path
 
 
+def _render_text_banner(img: np.ndarray,
+                        title: Optional[str],
+                        description: Optional[str]) -> np.ndarray:
+    """
+    Returns an RGBA image array derived from img, with a banner containing
+    the model run's title and description prepended to the top of the image.
+
+    The banner is a light strip spanning the full width of the image, with
+    the title displayed in bold and the description displayed in smaller,
+    lighter text beneath it. Text is wrapped to fit within the width of the
+    image. If both title and description are absent, img is returned
+    unchanged.
+
+    :param img:
+        An RGBA image array to be decorated with text
+    :param title:
+        The title to display, or None for no title
+    :param description:
+        The description to display, or None for no description
+    :return:
+        An RGBA image array with the text banner prepended
+    """
+    if not title and not description:
+        return img
+
+    from PIL import Image, ImageDraw, ImageFont
+    from matplotlib import font_manager
+
+    height, width = img.shape[:2]
+    margin = 10
+
+    # Load TrueType fonts bundled with matplotlib.
+    title_font_path = font_manager.findfont(
+        font_manager.FontProperties(family="DejaVu Sans", weight="bold"))
+    body_font_path = font_manager.findfont(
+        font_manager.FontProperties(family="DejaVu Sans"))
+    title_font = ImageFont.truetype(title_font_path, 16)
+    body_font = ImageFont.truetype(body_font_path, 13)
+
+    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+
+    def wrap_text(text: str, font: ImageFont) -> List[str]:
+        words = text.split()
+        if not words:
+            return [""]
+        lines = []
+        current = words[0]
+        for word in words[1:]:
+            candidate = current + " " + word
+            if probe.textlength(candidate, font=font) <= width - 2 * margin:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+        return lines
+
+    title_lines = wrap_text(title, title_font) if title else []
+    desc_lines = wrap_text(description, body_font) if description else []
+
+    title_height = len(title_lines) * 30
+    desc_height = len(desc_lines) * 19 if desc_lines else 0
+    bottom_gap = 24
+    banner_height = margin + title_height + (6 if desc_lines else 0) + desc_height + bottom_gap
+
+    banner = np.full((banner_height, width, 4), 255, dtype=np.uint8)
+    banner[:, :, 3] = 255
+    new_img = np.concatenate([banner, img], axis=0)
+
+    pil_img = Image.fromarray(new_img, "RGBA")
+    draw = ImageDraw.Draw(pil_img)
+    y = margin
+    for line in title_lines:
+        line_width = draw.textlength(line, font=title_font)
+        draw.text(((width - line_width) / 2, y), line, font=title_font,
+                  fill=(20, 20, 20, 255))
+        y += 30
+    if desc_lines:
+        y += 6
+    for line in desc_lines:
+        line_width = draw.textlength(line, font=body_font)
+        draw.text(((width - line_width) / 2, y), line, font=body_font,
+                  fill=(90, 90, 90, 255))
+        y += 19
+
+    return np.asarray(pil_img)
+
+
 class ModelImageRenderer:
     """
     A converter between gridded climate data and image visualizations of the
@@ -169,7 +281,9 @@ class ModelImageRenderer:
 
     def save_image(self: 'ModelImageRenderer',
                    out_path: str,
-                   min_max_grades: Tuple[float, float] = (-8, 8)) -> None:
+                   min_max_grades: Tuple[float, float] = (-8, 8),
+                   title: Optional[str] = None,
+                   description: Optional[str] = None) -> None:
         """
         Produces a .PNG formatted image file containing the gridded data
         overlaid on a map projection.
@@ -186,6 +300,9 @@ class ModelImageRenderer:
         applies to any cell with a temperature greater than min_max_grades[1].
         The default boundaries are -60 and 40.
 
+        The optional title and description parameters, if provided, are
+        rendered into a banner at the top of the image.
+
         The image is saved at the specified absolute or relative filepath.
 
         :param out_path:
@@ -193,6 +310,10 @@ class ModelImageRenderer:
         :param min_max_grades:
             A tuple containing the boundary values for the colorbar shown in
             the image file
+        :param title:
+            An optional title for the image
+        :param description:
+            An optional description for the image
         """
         if min_max_grades is not None and len(min_max_grades) != 2:
             raise ValueError("Color grade boundaries must be given in a tuple"
@@ -245,14 +366,11 @@ class ModelImageRenderer:
 
         for i in range(img.shape[0]):
             for j in range(img.shape[1] - 43, img.shape[1]):
-                pixel = tuple(img[i, j, :])
-                # if sum(pixel) == 765:
-                if sum(pixel) < 450 and j >= img.shape[1] - 33:
-                    img[i, j, :] = [147, 149, 152]
-                elif j >= img.shape[1] - 33 or i < 9 or i > img.shape[0] - 9:
+                if j >= img.shape[1] - 33 or i < 9 or i > img.shape[0] - 9:
                     alphas[i, j] = 0
 
         img = np.dstack((img, alphas))
+        img = _render_text_banner(img, title, description)
         plt.imsave(fname=out_path, arr=img)
         plt.close()
 
@@ -315,7 +433,8 @@ def write_image_type(data: np.ndarray,
             output_center.submit_output(Debug.PRINT_NOTICES,
                                         "\tSaving image file {}...".format(i))
             g = ModelImageRenderer(data[i])
-            g.save_image(img_path, config.colorbar())
+            g.save_image(img_path, config.colorbar(),
+                         title=config.title(), description=config.description())
             created = True
 
     return created
@@ -480,8 +599,9 @@ class ModelOutput:
         """
         run_title = config.run_id()
 
-        # Create a directory for this model output if none exists already.
-        out_dir_path = path.join(OUTPUT_FULL_PATH, run_title)
+        # Choose a directory for this model output, numbering runs so that
+        # earlier runs' output is not overwritten.
+        out_dir_path = get_run_directory(run_title)
         out_dir = Path(out_dir_path)
         out_dir.mkdir(exist_ok=True)
 
@@ -566,7 +686,9 @@ def save_from_dataset(dataset_parent: str,
 
             # Write the new image file.
             img_writer = ModelImageRenderer(selected_time_data)
-            img_writer.save_image(img_path, config.colorbar())
+            img_writer.save_image(img_path, config.colorbar(),
+                                  title=config.title(),
+                                  description=config.description())
             reader.close()
 
         return created

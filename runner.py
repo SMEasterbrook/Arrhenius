@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", message=".*Usage of ImageContainer is deprecated.*")
+
 from data.grid import LatLongGrid, GridCell,\
     extract_multidimensional_grid_variable
 from data.collector import ClimateDataCollector
